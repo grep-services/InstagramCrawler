@@ -1,4 +1,4 @@
-package java.services.grep;
+package main.java.services.grep;
 /**
  * 
  * 이 시스템에 맞게 특화된 logger.
@@ -9,9 +9,9 @@ package java.services.grep;
  *
  */
 
-public class Logger {
+public class Printer {
 
-	public Logger() {
+	public Printer() {
 	}
 	
 	public static void printException(String msg) {
