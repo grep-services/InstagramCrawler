@@ -25,7 +25,7 @@ import main.java.services.grep.Task.TaskCallback;
 
 public class Main implements TaskCallback {
 
-	final String tag = "먹스타그램";
+	final String tag = "조호찬";
 	
 	List<Account> accounts;
 	List<Range<Long>> schedule;
@@ -33,13 +33,13 @@ public class Main implements TaskCallback {
 	
 	public Main() {
 		initAccounts();// accounts는 file로 받는 것이 더 빠를듯.
-		initSchedule();// acconts 개수에 따라 schedule 단순 분할한다.
-		initTasks();// 아무리 accounts가 정해져있어도, 그래도 이정도는 받아서 tasks 바로 구성해준다.
+		initSchedule();// acconts 개수에 따라 schedule 단순 분할한다.(2/3정도로 해본다.)
+		initTasks();// schedule에 맞게 tasks 구성해준다.
 		
 		start();
 	}
 	
-	public void allocAccount(Task task) {
+	synchronized public void allocAccount(Task task) {// main 및 observer에서 access될 수 있으므로 sync.
 		Account newAccount = null;
 		
 		for(Account account : accounts) {// 어차피 기존 account는 exception 날수도.
@@ -54,6 +54,8 @@ public class Main implements TaskCallback {
 		
 		if(newAccount != null) {
 			task.setAccount(newAccount);
+			task.setStatus(Task.Status.WORKING);
+			task.start();
 		}
 	}
 	
@@ -74,30 +76,22 @@ public class Main implements TaskCallback {
 	}
 
 	public void start() {
-		for(Task task : tasks) {
-			synchronized(task) {// start하는 도중 다른데서 unavailable인줄 알고 갖고가는 일 없도록.
-				task.start();
-				
-				task.setStatus(Task.Status.WORKING);
-			}
-		}
-		
 		new Observer().start();
 	}
 	
-	// 현재 알고리즘은 단순하다. accounts 절반으로 tasks 만들고, 나머지는 보충용도로 쓴다.
+	// 현재 알고리즘은 단순하다. schedule만큼만 tasks 만든다.
 	public void initTasks() {
 		tasks = new ArrayList<Task>();
 		
-		for(int i = 0; i < accounts.size(); i++) {
-			Task task = new Task(tag, accounts.get(i), schedule.get(i), this);
+		for(int i = 0; i < schedule.size(); i++) {
+			Task task = new Task(tag, schedule.get(i), this);
 			
 			tasks.add(task);
 		}
 	}
 	
 	public void initSchedule() {
-		long max = 2069993533294892048l;
+		long max = 1069993533294892048l;
 		long size = max / accounts.size();
 		
 		schedule = new ArrayList<Range<Long>>();
@@ -144,15 +138,24 @@ public class Main implements TaskCallback {
 	
 	class Observer extends Thread {
 
-		final int PERIOD = 10 * 60 * 1000;// 10분
+		final long PERIOD = 10 * 60 * 1000;// 10분
 		
 		@Override
 		public void run() {
 			while(true) {
 				for(Task task : tasks) {
 					if(task.getStatus() == Task.Status.UNAVAILABLE) {
-						allocAccount(task);
+						// 이렇게 하면 account가 할당되지 않은 첫 시작 및, exceeded된 나중까지 커버 가능하다.
+						if(task.getAccount() == null || task.getAccount().getStatus() == Account.Status.UNAVAILABLE) {
+							allocAccount(task);
+						}
 					}
+				}
+				
+				try {
+					Thread.sleep(PERIOD);
+				} catch (InterruptedException e) {
+					Printer.printException(e.getMessage());
 				}
 			}
 		}

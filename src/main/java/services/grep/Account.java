@@ -66,15 +66,15 @@ public class Account {
 			// library가 object 구조를 좀 애매하게 해놓아서, 바로 loop 하기보다, 1 cycle은 직접 작성해주는 구조가 되었다.
 			TagMediaFeed list = instagram.getRecentMediaTags(tag, null, to);// max도 null일 수 있다.(recent)
 			
-			// 첫 list로 받긴 하지만, 처음부터도 filtering을 해야 한다. 만약 filtered되면, 바로 return한다.
-			if(list.getPagination() == null) {//TODO: 이게 단1개의 PAGE라도 없으면 나오는지, 마지막에 도달하면 나오는지 CHECK... -> 1개라도 없을때는 아닌듯. max가 아무리 커도 알아서 맞춰준다.
-        		callback.onAccountPageEnd();
-        		
-        		return null;
-			}
-			
-			if(list.getPagination().getNextMaxId().compareTo(from) < 0) {
-				result = filterList(result, from);
+			/*
+			 * page 관련되어서는 max, min의 null 여부를 두고 판단한다. min null인건 사실 zero page이고, max null인건 end of page라는 뜻이다.
+			 * zero page는 뭐 굳이 따로 구분할 필요 없고, end of page인건 어차피 range done에 속한다.
+			 * 따라서, null check부터 해서, end of page인지, range 초과했는지만 조사해주면 된다.
+			 * 그리고 next max는 말그대로 next의 것이므로, 현재 list는 from안에 다 들어올 수도 있다.
+			 * 참고로, hasnextpage가 안되는줄 알았는데 일단 되길래 쓴다. 이건 url 존재여부로 판단하는 것이다.
+			 */
+			if(!list.getPagination().hasNextPage() || list.getPagination().getNextMaxId().compareTo(from) < 0) {
+				result = filterList(list.getData(), from);
 
         		callback.onAccountRangeDone();
 				
@@ -93,15 +93,8 @@ public class Account {
 			MediaFeed nextList = instagram.getRecentMediaNextPage(page);
             
             while(true) {
-            	// page 더이상 없는 경우
-            	if(nextList.getPagination() == null) {
-            		callback.onAccountPageEnd();
-            		
-            		break;
-            	}
-            	
             	// range check.
-            	if(nextList.getPagination().getNextMaxTagId().compareTo(from) < 0) {
+            	if(!nextList.getPagination().hasNextPage() || nextList.getPagination().getNextMaxTagId().compareTo(from) < 0) {
             		result.addAll(filterList(nextList.getData(), from));
             		
             		callback.onAccountRangeDone();
@@ -122,7 +115,7 @@ public class Account {
                 nextList = instagram.getRecentMediaNextPage(page);
             }
 		} catch (InstagramException e) {
-			//TODO: 분명히, 애초에 LIMIT 0인 것은 여기로 올 수 있을 것 같다. 여기서도 CALLBACK 처리되게 해줘야 한다.
+			//TODO: 분명히, 애초에 LIMIT 0인 것은 여기로 올 수 있을 것 같다. 여기서도 CALLBACK 처리되게 해줘야 한다. limit뿐만 아니라 그냥 exception도...
 			Printer.printException(e.getMessage());
 		}
 		
@@ -180,7 +173,6 @@ public class Account {
 	}
 	
 	public interface AccountCallback {
-		void onAccountPageEnd();// zero page
 		void onAccountLimitExceeded(Long bound);// limit exceeded
 		void onAccountRangeDone();// range done
 	}

@@ -26,16 +26,13 @@ public class Task extends Thread implements AccountCallback {
 	}
 	public Status status;
 	
-	public boolean isWorking = false;
-	
 	String tag;
 	Account account;
 	Range<Long> range;
 	TaskCallback callback;
 	
-	public Task(String tag, Account account, Range<Long> range, TaskCallback callback) {
+	public Task(String tag, Range<Long> range, TaskCallback callback) {
 		this.tag = tag;
-		this.account = account;
 		this.range = range;
 		this.callback = callback;
 		
@@ -48,9 +45,10 @@ public class Task extends Thread implements AccountCallback {
 			this.account.updateStatus();// status 정리해준다.
 		}
 		
-		account.setStatus(Account.Status.WORKING);
-		
 		this.account = account;
+		
+		account.setCallback(this);
+		account.setStatus(Account.Status.WORKING);
 	}
 	
 	public Account getAccount() {
@@ -64,17 +62,7 @@ public class Task extends Thread implements AccountCallback {
 		
 		// db에 저장
 	}
-
-	@Override
-	public void onAccountPageEnd() {// zero page - 어차피 끝난건 마찬가지이다. 다만, 끝난게 아니라 원래 없던 것일수도.
-		Printer.printException("Last page");
-		
-		account.updateStatus();// 다 썼으니까 refresh 한번 해준다.(working 상태가 아니게 만드는 의미도 있다.)
-		account = null;// 굳이 할 필요는 없지만...
-		
-		callback.onTaskJobCompleted(this);
-	}
-
+	
 	@Override
 	public void onAccountLimitExceeded(Long bound) {// limit exceeded - 새 account를 요청해야 한다.
 		Printer.printException("Limit exceeded");
@@ -82,7 +70,6 @@ public class Task extends Thread implements AccountCallback {
 		range = Range.between(range.getMinimum(), bound);// range 재정산.
 		
 		account.setStatus(Account.Status.UNAVAILABLE);
-		account = null;// 굳이 할 필요는 없지만...
 		
 		callback.onTaskAccountDischarged(this);
 	}
@@ -92,7 +79,6 @@ public class Task extends Thread implements AccountCallback {
 		Printer.printException("Range done");
 		
 		account.updateStatus();// 다 썼으니까 refresh 한번 해준다.(working 상태가 아니게 만드는 의미도 있다.)
-		account = null;// 굳이 할 필요는 없지만...
 		
 		callback.onTaskJobCompleted(this);
 	}
