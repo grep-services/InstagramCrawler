@@ -75,8 +75,8 @@ public class Task extends Thread implements AccountCallback {
 	}
 
 	@Override
-	public void onAccountExceptionOccur(Long bound) {// account occur - 다시 실행되어야 한다.
-		Logger.printException("Limit exceeded");
+	public void onAccountExceptionOccurred(Long bound) {// account occur - 다시 실행되어야 한다.
+		Logger.printException("Exception occurred");
 		
 		range = Range.between(range.getMinimum(), bound);// range 재정산.
 		

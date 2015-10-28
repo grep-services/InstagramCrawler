@@ -91,7 +91,7 @@ public class Account {
 			
 			Pagination page = list.getPagination();
 			MediaFeed nextList = instagram.getRecentMediaNextPage(page);
-            
+            int cnt = 0;
             while(true) {
             	// range check.
             	if(!nextList.getPagination().hasNextPage() || nextList.getPagination().getNextMaxTagId().compareTo(from) < 0) {
@@ -113,10 +113,17 @@ public class Account {
             	
                 page = nextList.getPagination();
                 nextList = instagram.getRecentMediaNextPage(page);
+                
+                cnt++;
+                if(cnt == 2) {
+                	throw new InstagramException("unexpectable exception");
+                }
             }
 		} catch (InstagramException e) {
 			//TODO: 분명히, 애초에 LIMIT 0인 것은 여기로 올 수 있을 것 같다. 여기서도 CALLBACK 처리되게 해줘야 한다. limit뿐만 아니라 그냥 exception도...
 			Logger.printException(e.getMessage());
+			// 이렇게 max id를 넘기는게 맞는것 같긴 하지만, range check도 안되고 exception 났을 수도 있으므로 그것 관련도 생각해줘야 할 듯 하다.
+			callback.onAccountExceptionOccurred(Long.valueOf(nextList.getPagination().getNextMaxTagId()));
 		}
 		
 		return result;
@@ -174,7 +181,7 @@ public class Account {
 	
 	public interface AccountCallback {
 		void onAccountLimitExceeded(Long bound);// limit exceeded
-		void onAccountExceptionOccur(Long bound);
+		void onAccountExceptionOccurred(Long bound);// exception occured
 		void onAccountRangeDone();// range done
 	}
 
