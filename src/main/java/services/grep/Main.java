@@ -25,15 +25,13 @@ import main.java.services.grep.Task.TaskCallback;
 
 public class Main implements TaskCallback {
 
-	final String tag = "조호찬";
+	final String tag = "먹스타그램";
 	
 	List<Account> accounts;
-	List<Range<Long>> schedule;
 	List<Task> tasks;
 	
 	public Main() {
 		initAccounts();// accounts는 file로 받는 것이 더 빠를듯.
-		initSchedule();// acconts 개수에 따라 schedule 단순 분할한다.(2/3정도로 해본다.)
 		initTasks();// schedule에 맞게 tasks 구성해준다.
 		
 		start();
@@ -79,28 +77,28 @@ public class Main implements TaskCallback {
 		new Observer().start();
 	}
 	
-	// 현재 알고리즘은 단순하다. schedule만큼만 tasks 만든다.
+	// 현재 알고리즘은 단순하다. schedule 만들고, schedule만큼 tasks 만든다.
 	public void initTasks() {
+		long min = 0;
+		long max = 1069993533294892048l;
+		long diff = max - min;
+		
 		tasks = new ArrayList<Task>();
 		
-		for(int i = 0; i < schedule.size(); i++) {
-			Task task = new Task(tag, schedule.get(i), this);
+		// 간단하게 하려 해도 그 간단하게 하려는 것 때문에 복잡해진다. 그냥 풀어서 쓴다.
+		if(diff == 0) {
+			tasks.add(new Task(tag, Range.between(min, min), this));
+		} else if(diff < accounts.size()) {// 상식적으로 accounts가 수백개가 될 리가 없다.
+			tasks.add(new Task(tag, Range.between(min, max), this));
+		} else {
+			long size = diff / accounts.size();// 일단 교대 안해본다.(속도상 exceeded가 안생길 것 같기도 해서)
 			
-			tasks.add(task);
-		}
-	}
-	
-	public void initSchedule() {
-		long max = 1069993533294892048l;
-		long size = max / accounts.size();
-		
-		schedule = new ArrayList<Range<Long>>();
-		
-		for(int i = 0; i < accounts.size(); i++) {
-			if(i < accounts.size() - 1) {
-				schedule.add(Range.between(i * size + 1, (i + 1) * size));
-			} else {
-				schedule.add(Range.between(i * size + 1, max));// n빵이 딱 떨어지는건 아니다.
+			for(int i = 0; i < accounts.size(); i++) {
+				if(i < accounts.size() - 1) {
+					tasks.add(new Task(tag, Range.between(min + (i * size), min + ((i + 1) * size - 1)), this));
+				} else {
+					tasks.add(new Task(tag, Range.between(min + (i * size), max), this));// n빵이 딱 떨어지는건 아니다.
+				}
 			}
 		}
 	}

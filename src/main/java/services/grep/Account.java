@@ -73,7 +73,7 @@ public class Account {
 			 * 그리고 next max는 말그대로 next의 것이므로, 현재 list는 from안에 다 들어올 수도 있다.
 			 * 참고로, hasnextpage가 안되는줄 알았는데 일단 되길래 쓴다. 이건 url 존재여부로 판단하는 것이다.
 			 */
-			if(!list.getPagination().hasNextPage() || list.getPagination().getNextMaxId().compareTo(from) < 0) {
+			if(!list.getPagination().hasNextPage() || list.getPagination().getNextMaxTagId().compareTo(from) < 0) {
 				result = filterList(list.getData(), from);
 
         		callback.onAccountRangeDone();
@@ -84,7 +84,7 @@ public class Account {
 			}
 			
 			if(list.getRemainingLimitStatus() == 0) {// 다 되어도 0이면 return해야 한다.
-        		callback.onAccountLimitExceeded(Long.valueOf(list.getPagination().getNextMaxId()));// range 바로 잡기 좋게 next max로...
+        		callback.onAccountLimitExceeded(Long.valueOf(list.getPagination().getNextMaxTagId()));// range 바로 잡기 좋게 next max로...
         		
         		return result;
 			}
@@ -106,7 +106,7 @@ public class Account {
             	
             	// query limit 다 쓴 경우
             	if(nextList.getRemainingLimitStatus() == 0) {
-            		callback.onAccountLimitExceeded(Long.valueOf(nextList.getPagination().getNextMaxId()));
+            		callback.onAccountLimitExceeded(Long.valueOf(nextList.getPagination().getNextMaxTagId()));
             		
             		break;
             	}
