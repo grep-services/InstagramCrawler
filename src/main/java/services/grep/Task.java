@@ -48,7 +48,7 @@ public class Task extends Thread implements AccountCallback {
 		this.account = account;
 		
 		account.setCallback(this);
-		account.setStatus(Account.Status.WORKING);
+		account.setStatus(Account.Status.WORKING);// 단순하게, 할당된 시점부터를 working이라 잡는다.
 	}
 	
 	public Account getAccount() {
@@ -65,7 +65,7 @@ public class Task extends Thread implements AccountCallback {
 	
 	@Override
 	public void onAccountLimitExceeded(Long bound) {// limit exceeded - 새 account를 요청해야 한다.
-		Printer.printException("Limit exceeded");
+		Logger.printException("Limit exceeded");
 		
 		range = Range.between(range.getMinimum(), bound);// range 재정산.
 		
@@ -75,8 +75,17 @@ public class Task extends Thread implements AccountCallback {
 	}
 
 	@Override
+	public void onAccountExceptionOccur(Long bound) {// account occur - 다시 실행되어야 한다.
+		Logger.printException("Limit exceeded");
+		
+		range = Range.between(range.getMinimum(), bound);// range 재정산.
+		
+		callback.onTaskUnexpectedlyStopped(this);
+	}
+
+	@Override
 	public void onAccountRangeDone() {// range done - 끝난 것.
-		Printer.printException("Range done");
+		Logger.printException("Range done");
 		
 		account.updateStatus();// 다 썼으니까 refresh 한번 해준다.(working 상태가 아니게 만드는 의미도 있다.)
 		
@@ -93,6 +102,7 @@ public class Task extends Thread implements AccountCallback {
 
 	public interface TaskCallback {
 		void onTaskAccountDischarged(Task task);
+		void onTaskUnexpectedlyStopped(Task task);
 		void onTaskJobCompleted(Task task);
 	}
 	

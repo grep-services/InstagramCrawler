@@ -9,9 +9,9 @@ package main.java.services.grep;
  *
  */
 
-public class Printer {
+public class Logger {
 
-	public Printer() {
+	public Logger() {
 	}
 	
 	public static void printException(String msg) {

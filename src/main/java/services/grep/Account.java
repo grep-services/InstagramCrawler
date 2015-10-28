@@ -116,7 +116,7 @@ public class Account {
             }
 		} catch (InstagramException e) {
 			//TODO: 분명히, 애초에 LIMIT 0인 것은 여기로 올 수 있을 것 같다. 여기서도 CALLBACK 처리되게 해줘야 한다. limit뿐만 아니라 그냥 exception도...
-			Printer.printException(e.getMessage());
+			Logger.printException(e.getMessage());
 		}
 		
 		return result;
@@ -146,7 +146,7 @@ public class Account {
 			}
 		} catch (InstagramException e) {
 			//TODO: 분명히, 애초에 LIMIT 0인 것은 여기로 올 수 있을 것 같다. 여기서도 CALLBACK 처리되게 해줘야 한다.
-			Printer.printException("LIMIT" + e.getMessage());
+			Logger.printException("LIMIT" + e.getMessage());
 		}
 		
 		return remaining;
@@ -174,6 +174,7 @@ public class Account {
 	
 	public interface AccountCallback {
 		void onAccountLimitExceeded(Long bound);// limit exceeded
+		void onAccountExceptionOccur(Long bound);
 		void onAccountRangeDone();// range done
 	}
 

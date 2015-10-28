@@ -37,6 +37,16 @@ public class Main implements TaskCallback {
 		start();
 	}
 	
+	synchronized public void startTask(Task task) {// 사실 항상 account change를 통해서만 task를 실행시켜야 될 일은 아니다.(재시작도 있을 수 있기 때문)
+		try {// exception 때문에 stop되는 thread는 stop 되기 전에 여기로 와서 실행될 가능성도 0이라 할 수 없기에 이렇게 했다. 여기서 안되면 다음에 될 것이다.
+			task.start();
+			
+			task.setStatus(Task.Status.WORKING);//TODO: 이렇게 한다고 확실히 START를 보장할 수 있을지.
+		} catch(IllegalThreadStateException e) {
+			Logger.printException(e.getMessage());
+		}
+	}
+	
 	synchronized public void allocAccount(Task task) {// main 및 observer에서 access될 수 있으므로 sync.
 		Account newAccount = null;
 		
@@ -52,14 +62,14 @@ public class Main implements TaskCallback {
 		
 		if(newAccount != null) {
 			task.setAccount(newAccount);
-			task.setStatus(Task.Status.WORKING);
-			task.start();
+			
+			startTask(task);
 		}
 	}
 	
 	@Override
 	public void onTaskAccountDischarged(Task task) {
-		Printer.printException("Need account");
+		Logger.printException("Need account");
 		
 		task.setStatus(Task.Status.UNAVAILABLE);
 		
@@ -67,14 +77,24 @@ public class Main implements TaskCallback {
 	}
 
 	@Override
+	public void onTaskUnexpectedlyStopped(Task task) {
+		Logger.printException("Task restart");
+		
+		task.setStatus(Task.Status.UNAVAILABLE);
+		
+		// account는 그대로 두면 되고, observer에 의해서도 되긴 하겠지만 직접도 해준다
+		startTask(task);// 어차피 안되면 exception 나고 넘어간다.
+	}
+
+	@Override
 	public void onTaskJobCompleted(Task task) {
-		Printer.printException("Job Completed");
+		Logger.printException("Job Completed");
 		
 		task.setStatus(Task.Status.DONE);
 	}
 
 	public void start() {
-		new Observer().start();
+		new Observer().start();//TODO: daemon으로 할 필요 없는지 생각해본다.
 	}
 	
 	// 현재 알고리즘은 단순하다. schedule 만들고, schedule만큼 tasks 만든다.
@@ -118,14 +138,14 @@ public class Main implements TaskCallback {
 				accounts.add(new Account(array[0], array[1], array[2]));
 			}
 		} catch (FileNotFoundException e) {
-			Printer.printException(e.getMessage());
+			Logger.printException(e.getMessage());
 		} catch (IOException e) {
-			Printer.printException(e.getMessage());
+			Logger.printException(e.getMessage());
 		} finally {
 			try {
 				reader.close();
 			} catch (IOException e) {
-				Printer.printException(e.getMessage());
+				Logger.printException(e.getMessage());
 			}
 		}
 	}
@@ -146,6 +166,9 @@ public class Main implements TaskCallback {
 						// 이렇게 하면 account가 할당되지 않은 첫 시작 및, exceeded된 나중까지 커버 가능하다.
 						if(task.getAccount() == null || task.getAccount().getStatus() == Account.Status.UNAVAILABLE) {
 							allocAccount(task);
+						} else {// 이 경우는, 그냥 exception나서 task는 꺼지고 account는 그대로 남은 경우이다.(사실 free일 경우는 없다.)
+							// account가 어떻게 되었을 지 모르기 때문에 check를 해줄까 했지만, 일단 재시작에 초점을 맞춘다.
+							startTask(task);
 						}
 					}
 				}
@@ -153,7 +176,7 @@ public class Main implements TaskCallback {
 				try {
 					Thread.sleep(PERIOD);
 				} catch (InterruptedException e) {
-					Printer.printException(e.getMessage());
+					Logger.printException(e.getMessage());
 				}
 			}
 		}
