@@ -93,6 +93,7 @@ public class Account {
 			MediaFeed nextList = instagram.getRecentMediaNextPage(page);
             int cnt = 0;
             while(true) {
+            	if(cnt++<2) throw new InstagramException("asdf");
             	// range check.
             	if(!nextList.getPagination().hasNextPage() || nextList.getPagination().getNextMaxTagId().compareTo(from) < 0) {
             		result.addAll(filterList(nextList.getData(), from));
@@ -113,17 +114,20 @@ public class Account {
             	
                 page = nextList.getPagination();
                 nextList = instagram.getRecentMediaNextPage(page);
-                
-                cnt++;
-                if(cnt == 2) {
-                	throw new InstagramException("unexpectable exception");
-                }
             }
 		} catch (InstagramException e) {
-			//TODO: 분명히, 애초에 LIMIT 0인 것은 여기로 올 수 있을 것 같다. 여기서도 CALLBACK 처리되게 해줘야 한다. limit뿐만 아니라 그냥 exception도...
-			Logger.printException(e.getMessage());
-			// 이렇게 max id를 넘기는게 맞는것 같긴 하지만, range check도 안되고 exception 났을 수도 있으므로 그것 관련도 생각해줘야 할 듯 하다.
-			callback.onAccountExceptionOccurred(Long.valueOf(nextList.getPagination().getNextMaxTagId()));
+			/*
+			 * 여기는, exceeded 뿐만 아니라, 일반적인 ioexception 등 여러가지 올 수 있다.
+			 * 판단 기준은 result뿐이며, 일반 list인 관계로 max id 같은 것 없다.
+			 * result last item id로 range check 하고 callback에 item id -1로 bound 넘긴다.
+			 * 물론 result null 및 empty check는 수반되어야 한다.
+			 */
+			if(result == null || result.isEmpty()) {
+				callback.onAccountRangeDone();// 없어도 어쨌든 완료다.
+			} else {// result에의 대입 자체가 from을 넘어선 assign을 하지 않기 때문에 그 check를 할 필요는 없고, 다만 bound를 알려주면 된다.
+				// from은 최소 0이고, id도 최소 0이기 때문에, 둘다 0이라면 위에서 filtered될 것이므로, 여기서 -1을 해도 음수가 될 일은 없다.
+				callback.onAccountExceptionOccurred(Long.valueOf(result.get(result.size() - 1).getId().split("_")[0]) - 1);
+			}
 		}
 		
 		return result;

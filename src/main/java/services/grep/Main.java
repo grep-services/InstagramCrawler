@@ -39,7 +39,7 @@ public class Main implements TaskCallback {
 	
 	synchronized public void startTask(Task task) {// 사실 항상 account change를 통해서만 task를 실행시켜야 될 일은 아니다.(재시작도 있을 수 있기 때문)
 		try {// exception 때문에 stop되는 thread는 stop 되기 전에 여기로 와서 실행될 가능성도 0이라 할 수 없기에 이렇게 했다. 여기서 안되면 다음에 될 것이다.
-			task.start();
+			task.start();//TODO: 그냥 START해서는 안되는 것 같다. 방법을 찾아본다. RUN 안에서 TASK를 종료하게 하는 구조 자체가 이상하긴 하다.
 			
 			task.setStatus(Task.Status.WORKING);//TODO: 이렇게 한다고 확실히 START를 보장할 수 있을지.
 		} catch(IllegalThreadStateException e) {
