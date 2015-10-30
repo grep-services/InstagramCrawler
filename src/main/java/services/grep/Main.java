@@ -37,17 +37,47 @@ public class Main implements TaskCallback {
 		start();
 	}
 	
-	synchronized public void startTask(Task task) {// 사실 항상 account change를 통해서만 task를 실행시켜야 될 일은 아니다.(재시작도 있을 수 있기 때문)
-		try {// exception 때문에 stop되는 thread는 stop 되기 전에 여기로 와서 실행될 가능성도 0이라 할 수 없기에 이렇게 했다. 여기서 안되면 다음에 될 것이다.
-			task.start();//TODO: 그냥 START해서는 안되는 것 같다. 방법을 찾아본다. RUN 안에서 TASK를 종료하게 하는 구조 자체가 이상하긴 하다.
+	public void stopTask(Task task) {
+		task.setStatus(Task.Status.DONE);
+	}
+	
+	public void pauseTask(Task task) {
+		task.setStatus(Task.Status.UNAVAILABLE);
+	}
+	
+	public void resumeTask(Task task) {// 어차피 alloc 안에서 run되므로 sync 또 할 필요 없다.
+		task.setStatus(Task.Status.WORKING);
+	}
+	
+	public void startTask(Task task) {
+		try {
+			task.setStatus(Task.Status.WORKING);
 			
-			task.setStatus(Task.Status.WORKING);//TODO: 이렇게 한다고 확실히 START를 보장할 수 있을지.
+			task.start();
 		} catch(IllegalThreadStateException e) {
 			Logger.printException(e.getMessage());
 		}
 	}
 	
-	synchronized public void allocAccount(Task task) {// main 및 observer에서 access될 수 있으므로 sync.
+	public void resizeTask(Task task, long bound) {
+		task.setRange(Range.between(task.getRange().getMinimum(), bound));
+	}
+	
+	public boolean isAllTasksCompleted() {
+		boolean completed = true;
+		
+		for(Task task : tasks) {
+			if(task.getStatus() != Task.Status.DONE) {
+				completed = false;
+				
+				break;
+			}
+		}
+		
+		return completed;
+	}
+	
+	synchronized public boolean allocAccount(Task task) {// main 및 observer에서 access될 수 있으므로 sync.
 		Account newAccount = null;
 		
 		for(Account account : accounts) {// 어차피 기존 account는 exception 날수도.
@@ -63,38 +93,45 @@ public class Main implements TaskCallback {
 		if(newAccount != null) {
 			task.setAccount(newAccount);
 			
-			startTask(task);
+			return true;
+		} else {
+			return false;
 		}
 	}
 	
 	@Override
-	public void onTaskAccountDischarged(Task task) {
+	public void onTaskAccountDischarged(Task task, long bound) {
 		Logger.printException("Need account");
 		
-		task.setStatus(Task.Status.UNAVAILABLE);
+		pauseTask(task);
 		
-		allocAccount(task);// 10분마다도 하지만, 필요할 때도 해준다.
+		resizeTask(task, bound);// 지금 실패하고 observer에 의해 나중에 실행될 수도 있지만, 그럴 때 resize할 수가 없으므로, 여기서 미리 한다.
+		
+		if(allocAccount(task)) {// acc 할당 성공했을 때만 resume하고, 그렇지 않을 때는 그냥 observer로 돌면서 기다린다.
+			resumeTask(task);
+		};
 	}
 
 	@Override
-	public void onTaskUnexpectedlyStopped(Task task) {
+	public void onTaskUnexpectedlyStopped(Task task, long bound) {
 		Logger.printException("Task restart");
 		
-		task.setStatus(Task.Status.UNAVAILABLE);
+		pauseTask(task);
 		
-		// account는 그대로 두면 되고, observer에 의해서도 되긴 하겠지만 직접도 해준다
-		startTask(task);// 어차피 안되면 exception 나고 넘어간다.
+		resizeTask(task, bound);
+		
+		resumeTask(task);
 	}
 
 	@Override
 	public void onTaskJobCompleted(Task task) {
 		Logger.printException("Job Completed");
 		
-		task.setStatus(Task.Status.DONE);
+		stopTask(task);
 	}
 
 	public void start() {
-		new Observer().start();//TODO: daemon으로 할 필요 없는지 생각해본다.
+		new Observer().start();
 	}
 	
 	// 현재 알고리즘은 단순하다. schedule 만들고, schedule만큼 tasks 만든다.
@@ -156,20 +193,26 @@ public class Main implements TaskCallback {
 	
 	class Observer extends Thread {
 
-		final long PERIOD = 10 * 60 * 1000;// 10분
+		final long PERIOD = 5 * 60 * 1000;// 5분
+		
+		public Observer() {
+			setDaemon(true);
+		}
 		
 		@Override
 		public void run() {
-			while(true) {
+			while(!isAllTasksCompleted()) {
 				for(Task task : tasks) {
 					if(task.getStatus() == Task.Status.UNAVAILABLE) {
-						// 이렇게 하면 account가 할당되지 않은 첫 시작 및, exceeded된 나중까지 커버 가능하다.
-						if(task.getAccount() == null || task.getAccount().getStatus() == Account.Status.UNAVAILABLE) {
-							allocAccount(task);
-						} else {// 이 경우는, 그냥 exception나서 task는 꺼지고 account는 그대로 남은 경우이다.(사실 free일 경우는 없다.)
-							// account가 어떻게 되었을 지 모르기 때문에 check를 해줄까 했지만, 일단 재시작에 초점을 맞춘다.
-							startTask(task);
-						}
+						if(task.getAccount() == null) {// 원래 초기화는 밖에서 하려 했으나, 이것도 마찬가지로 한번에 안될 수 있으므로 여기서 했다.
+							if(allocAccount(task)) {
+								startTask(task);
+							}
+						} else if(task.getAccount().getStatus() == Account.Status.UNAVAILABLE) {// exceeded
+							if(allocAccount(task)) {// 이미 pause, resize되어 있다. 할당해보고 되면 resume하고, 안되면 다시 pass.
+								resumeTask(task);
+							};
+						}// working일 경우는, 사실 exception이 났을 경운데, 그 경우는 처리되었을 것이라고 본다.
 					}
 				}
 				

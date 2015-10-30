@@ -37,6 +37,8 @@ public class Task extends Thread implements AccountCallback {
 		this.callback = callback;
 		
 		status = Status.UNAVAILABLE;
+		
+		setDaemon(true);
 	}
 	
 	// constructor 이외에도 set 될 일들 많다.
@@ -57,30 +59,27 @@ public class Task extends Thread implements AccountCallback {
 
 	@Override
 	public void run() {
-		// 결과는 callback으로 넘어가고, range는 사실 list의 min값을 확인해서 쓰면 된다.
-		List<MediaFeedData> list = account.getListFromTag(tag, String.valueOf(range.getMinimum()), String.valueOf(range.getMaximum()));
-		
-		// db에 저장
+		while(status != Status.DONE) {
+			while(status == Status.WORKING) {// account, range 등이 exception 등에 의해 변경될 수 있다. 그 때 다시 working으로 돌리면서 진입한다.
+				account.getListFromTag(tag, String.valueOf(range.getMinimum()), String.valueOf(range.getMaximum()));
+			}
+		}
 	}
 	
 	@Override
 	public void onAccountLimitExceeded(Long bound) {// limit exceeded - 새 account를 요청해야 한다.
 		Logger.printException("Limit exceeded");
+
+		account.setStatus(Account.Status.UNAVAILABLE);// acc 변화가 빨라야 observer와의 충돌이 안생긴다.
 		
-		range = Range.between(range.getMinimum(), bound);// range 재정산.
-		
-		account.setStatus(Account.Status.UNAVAILABLE);
-		
-		callback.onTaskAccountDischarged(this);
+		callback.onTaskAccountDischarged(this, bound);// ACC : UNAVAILABLE, TASK : UNAVAILABLE
 	}
 
 	@Override
 	public void onAccountExceptionOccurred(Long bound) {// account occur - 다시 실행되어야 한다.
 		Logger.printException("Exception occurred");
-		
-		range = Range.between(range.getMinimum(), bound);// range 재정산.
-		
-		callback.onTaskUnexpectedlyStopped(this);
+
+		callback.onTaskUnexpectedlyStopped(this, bound);// ACC : WORKING, TASK : UNAVAILABLE
 	}
 
 	@Override
@@ -89,7 +88,7 @@ public class Task extends Thread implements AccountCallback {
 		
 		account.updateStatus();// 다 썼으니까 refresh 한번 해준다.(working 상태가 아니게 만드는 의미도 있다.)
 		
-		callback.onTaskJobCompleted(this);
+		callback.onTaskJobCompleted(this);// ACC : 모르고, TASK : DONE. BREAK;
 	}
 	
 	public void setStatus(Status status) {
@@ -99,10 +98,18 @@ public class Task extends Thread implements AccountCallback {
 	public Status getStatus() {
 		return status;
 	}
+	
+	public void setRange(Range<Long> range) {
+		this.range = range;
+	}
+	
+	public Range<Long> getRange() {
+		return range;
+	}
 
 	public interface TaskCallback {
-		void onTaskAccountDischarged(Task task);
-		void onTaskUnexpectedlyStopped(Task task);
+		void onTaskAccountDischarged(Task task, long bound);
+		void onTaskUnexpectedlyStopped(Task task, long bound);
 		void onTaskJobCompleted(Task task);
 	}
 	
