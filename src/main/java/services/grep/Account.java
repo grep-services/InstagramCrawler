@@ -59,7 +59,11 @@ public class Account {
 	}
 	
 	public void writeListToDB(List<MediaFeedData> list) {
-		
+		/*
+		 * 한번에 써지지 않고 exception이 나면, 써진 부분 빼고 다시 write call한다.
+		 * 그래도 안되면 해결할 수 없는 exception 내고 기록하고 그 task는 종료한다.
+		 * 그리고 여기서 exception이 난 것은, 더이상 무엇을 받아도 소용이 없는 부분이므로, false를 return해서 다른 행동을 하지 않게 한다.
+		 */
 	}
 	
 	// string으로 더 많이 쓰이며, null까지 들어갈 수 있는 관계로 이렇게 했다.
@@ -99,9 +103,8 @@ public class Account {
 			
 			Pagination page = list.getPagination();
 			MediaFeed nextList = instagram.getRecentMediaNextPage(page);
-            int cnt = 0;
+			
             while(true) {
-            	if(cnt++<2) throw new InstagramException("asdf");
             	// range check.
             	if(!nextList.getPagination().hasNextPage() || nextList.getPagination().getNextMaxTagId().compareTo(from) < 0) {
             		result.addAll(filterList(nextList.getData(), from));
