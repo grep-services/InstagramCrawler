@@ -1,5 +1,6 @@
 package main.java.services.grep;
 
+import java.nio.file.AccessMode;
 import java.util.List;
 
 import org.apache.commons.lang3.Range;
@@ -91,6 +92,16 @@ public class Task extends Thread implements AccountCallback {
 		callback.onTaskJobCompleted(this);// ACC : 모르고, TASK : DONE. BREAK;
 	}
 	
+	@Override
+	public void onAccountStoringFailed(Long bound) {
+		Logger.printException("Storing failed");
+		
+		// 다른 데서라도 쓰이게 한다. working 이던 것들도 어차피 task가 꺼지므로 update되어야 한다. 하지만 곧 다른 task들도 마찬가지로 꺼질 것이다.
+		account.updateStatus();
+		
+		callback.onTaskIncompletelyFinished(this, bound);
+	}
+
 	public void setStatus(Status status) {
 		this.status = status;
 	}
@@ -111,6 +122,7 @@ public class Task extends Thread implements AccountCallback {
 		void onTaskAccountDischarged(Task task, long bound);
 		void onTaskUnexpectedlyStopped(Task task, long bound);
 		void onTaskJobCompleted(Task task);
+		void onTaskIncompletelyFinished(Task task, long bound);
 	}
 	
 }

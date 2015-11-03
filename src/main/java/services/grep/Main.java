@@ -125,9 +125,18 @@ public class Main implements TaskCallback {
 
 	@Override
 	public void onTaskJobCompleted(Task task) {
-		Logger.printException("Job Completed");
+		Logger.printException("Job completed");
 		
 		stopTask(task);
+	}
+	
+	@Override
+	public void onTaskIncompletelyFinished(Task task, long bound) {
+		Logger.printException("Incompletely finished : " + task.getRange().getMinimum() + ", " + bound);
+		
+		stopTask(task);
+		
+		resizeTask(task, bound);// stop 했어도 그래도 resizing 해두기는 한다.
 	}
 
 	public void start() {

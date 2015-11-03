@@ -58,12 +58,21 @@ public class Account {
 		this.callback = callback;
 	}
 	
-	public void writeListToDB(List<MediaFeedData> list) {
+	public boolean writeListToDB(List<MediaFeedData> list) {
 		/*
-		 * 한번에 써지지 않고 exception이 나면, 써진 부분 빼고 다시 write call한다.
-		 * 그래도 안되면 해결할 수 없는 exception 내고 기록하고 그 task는 종료한다.
-		 * 그리고 여기서 exception이 난 것은, 더이상 무엇을 받아도 소용이 없는 부분이므로, false를 return해서 다른 행동을 하지 않게 한다.
+		 * list도 위에서부터 기록하며, 안써진 부분은 거기부터 from까지가 된다.
+		 * return을 한 뒤에 그 method를 call하려면 bound도 넘겨야 되는데...
+		 * 그냥 깔끔하게, 문제없으면 true로 넘기고,
+		 * 있으면 exception에서 callback 부르고 false 넘긴다. 
 		 */
+		try {
+		} catch(Exception e) {
+			callback.onAccountStoringFailed(0l);
+			
+			return false;
+		}
+		
+		return true;
 	}
 	
 	// string으로 더 많이 쓰이며, null까지 들어갈 수 있는 관계로 이렇게 했다.
@@ -84,9 +93,10 @@ public class Account {
 			if(!list.getPagination().hasNextPage() || list.getPagination().getNextMaxTagId().compareTo(from) < 0) {
 				result = filterList(list.getData(), from);
 
-				writeListToDB(result);// 선 기록 후 보고, 그래야 차라리 기록 후 보고가 안되면 다시 덮어써지지, 반대로 되면 빈 공간이 생길 것.
-				
-        		callback.onAccountRangeDone();
+				// 선 기록 후 보고, 그래야 차라리 기록 후 보고가 안되면 다시 덮어써지지, 반대로 되면 빈 공간이 생길 것.
+				if(writeListToDB(result)) {
+					callback.onAccountRangeDone();
+				}
 				
 				return;// result;
 			} else {
@@ -94,9 +104,9 @@ public class Account {
 			}
 			
 			if(list.getRemainingLimitStatus() == 0) {// 다 되어도 0이면 return해야 한다.
-				writeListToDB(result);
-				
-        		callback.onAccountLimitExceeded(Long.valueOf(list.getPagination().getNextMaxTagId()));// range 바로 잡기 좋게 next max로...
+				if(writeListToDB(result)) {
+					callback.onAccountLimitExceeded(Long.valueOf(list.getPagination().getNextMaxTagId()));// range 바로 잡기 좋게 next max로...
+				}
         		
         		return;// result;
 			}
@@ -109,9 +119,9 @@ public class Account {
             	if(!nextList.getPagination().hasNextPage() || nextList.getPagination().getNextMaxTagId().compareTo(from) < 0) {
             		result.addAll(filterList(nextList.getData(), from));
             		
-            		writeListToDB(result);
-            		
-            		callback.onAccountRangeDone();
+            		if(writeListToDB(result)) {
+            			callback.onAccountRangeDone();
+            		}
             		
             		break;// 일반적으로 정상적인 exit route.
             	} else {
@@ -120,9 +130,9 @@ public class Account {
             	
             	// query limit 다 쓴 경우
             	if(nextList.getRemainingLimitStatus() == 0) {
-            		writeListToDB(result);
-            		
-            		callback.onAccountLimitExceeded(Long.valueOf(nextList.getPagination().getNextMaxTagId()));
+            		if(writeListToDB(result)) {
+            			callback.onAccountLimitExceeded(Long.valueOf(nextList.getPagination().getNextMaxTagId()));
+            		}
             		
             		break;
             	}
@@ -140,9 +150,10 @@ public class Account {
 			if(result == null || result.isEmpty()) {
 				callback.onAccountRangeDone();// 없어도 어쨌든 완료다.
 			} else {// result에의 대입 자체가 from을 넘어선 assign을 하지 않기 때문에 그 check를 할 필요는 없고, 다만 bound를 알려주면 된다.
-				writeListToDB(result);
-				// from은 최소 0이고, id도 최소 0이기 때문에, 둘다 0이라면 위에서 filtered될 것이므로, 여기서 -1을 해도 음수가 될 일은 없다.
-				callback.onAccountExceptionOccurred(Long.valueOf(result.get(result.size() - 1).getId().split("_")[0]) - 1);
+				if(writeListToDB(result)) {
+					// from은 최소 0이고, id도 최소 0이기 때문에, 둘다 0이라면 위에서 filtered될 것이므로, 여기서 -1을 해도 음수가 될 일은 없다.
+					callback.onAccountExceptionOccurred(Long.valueOf(result.get(result.size() - 1).getId().split("_")[0]) - 1);
+				}
 			}
 		}
 	}
@@ -200,6 +211,7 @@ public class Account {
 		void onAccountLimitExceeded(Long bound);// limit exceeded
 		void onAccountExceptionOccurred(Long bound);// exception occured
 		void onAccountRangeDone();// range done
+		void onAccountStoringFailed(Long bound);// storing failed - from to bound
 	}
 
 }
