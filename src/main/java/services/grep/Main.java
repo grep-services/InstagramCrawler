@@ -31,10 +31,19 @@ public class Main implements TaskCallback {
 	List<Task> tasks;
 	
 	public Main() {
+		initDatabase();
 		initAccounts();// accounts는 file로 받는 것이 더 빠를듯.
 		initTasks();// schedule에 맞게 tasks 구성해준다.
 		
 		start();
+	}
+	
+	public void initDatabase() {
+		Database.getInstance().init();
+	}
+	
+	public void releaseDatabase() {
+		Database.getInstance().release();
 	}
 	
 	public void stopTask(Task task) {
@@ -55,7 +64,7 @@ public class Main implements TaskCallback {
 			
 			task.start();
 		} catch(IllegalThreadStateException e) {
-			Logger.printException(e.getMessage());
+			Logger.printException(e);
 		}
 	}
 	
@@ -77,7 +86,7 @@ public class Main implements TaskCallback {
 		return completed;
 	}
 	
-	synchronized public boolean allocAccount(Task task) {// main 및 observer에서 access될 수 있으므로 sync.
+	public synchronized boolean allocAccount(Task task) {// main 및 observer에서 access될 수 있으므로 sync.
 		Account newAccount = null;
 		
 		for(Account account : accounts) {// 어차피 기존 account는 exception 날수도.
@@ -101,7 +110,7 @@ public class Main implements TaskCallback {
 	
 	@Override
 	public void onTaskAccountDischarged(Task task, long bound) {
-		Logger.printException("Need account");
+		Logger.printMessage("Need account");
 		
 		pauseTask(task);
 		
@@ -114,7 +123,7 @@ public class Main implements TaskCallback {
 
 	@Override
 	public void onTaskUnexpectedlyStopped(Task task, long bound) {
-		Logger.printException("Task restart");
+		Logger.printMessage("Task restart");
 		
 		pauseTask(task);
 		
@@ -125,14 +134,14 @@ public class Main implements TaskCallback {
 
 	@Override
 	public void onTaskJobCompleted(Task task) {
-		Logger.printException("Job completed");
+		Logger.printMessage("Job completed");
 		
 		stopTask(task);
 	}
 	
 	@Override
 	public void onTaskIncompletelyFinished(Task task, long bound) {
-		Logger.printException("Incompletely finished : " + task.getRange().getMinimum() + ", " + bound);
+		Logger.printMessage("Incompletely finished : " + task.getRange().getMinimum() + ", " + bound);
 		
 		stopTask(task);
 		
@@ -183,15 +192,15 @@ public class Main implements TaskCallback {
 				
 				accounts.add(new Account(array[0], array[1], array[2]));
 			}
-		} catch (FileNotFoundException e) {
-			Logger.printException(e.getMessage());
-		} catch (IOException e) {
-			Logger.printException(e.getMessage());
+		} catch(FileNotFoundException e) {
+			Logger.printException(e);
+		} catch(IOException e) {
+			Logger.printException(e);
 		} finally {
 			try {
 				reader.close();
-			} catch (IOException e) {
-				Logger.printException(e.getMessage());
+			} catch(IOException e) {
+				Logger.printException(e);
 			}
 		}
 	}
@@ -227,10 +236,12 @@ public class Main implements TaskCallback {
 				
 				try {
 					Thread.sleep(PERIOD);
-				} catch (InterruptedException e) {
-					Logger.printException(e.getMessage());
+				} catch(InterruptedException e) {
+					Logger.printException(e);
 				}
 			}
+			
+			releaseDatabase();
 		}
 		
 	}

@@ -11,11 +11,23 @@ package main.java.services.grep;
 
 public class Logger {
 
+	private static int progress = 0;
+	
 	public Logger() {
 	}
 	
-	public static void printException(String msg) {
-		System.out.println("Exception : " + msg);
+	public static void printException(Exception e) {
+		System.out.println("Exception : " + e.getMessage());
+	}
+	
+	public static void printMessage(String msg) {
+		System.out.println("Message : " + msg);
+	}
+	
+	public synchronized static void printProgress(int written) {
+		progress += written;
+		
+		System.out.println("Progress : " + progress);
 	}
 
 }

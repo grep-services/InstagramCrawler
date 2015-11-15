@@ -60,19 +60,20 @@ public class Account {
 	
 	public boolean writeListToDB(List<MediaFeedData> list) {
 		/*
-		 * list도 위에서부터 기록하며, 안써진 부분은 거기부터 from까지가 된다.
+		 * list도 위에서부터 기록하며, 안써진 부분은 from부터 거기까지가 된다.
 		 * return을 한 뒤에 그 method를 call하려면 bound도 넘겨야 되는데...
 		 * 그냥 깔끔하게, 문제없으면 true로 넘기고,
-		 * 있으면 exception에서 callback 부르고 false 넘긴다. 
+		 * 있으면 callback 부르고 false 넘긴다. 
 		 */
-		try {
-		} catch(Exception e) {
-			callback.onAccountStoringFailed(0l);
+		int index = Database.getInstance().write(list);
+		
+		if(index == list.size() - 1) {
+			return true;
+		} else {
+			callback.onAccountStoringFailed(Long.valueOf(list.get(index).getId()));// bound로 변환해야 한다.
 			
 			return false;
 		}
-		
-		return true;
 	}
 	
 	// string으로 더 많이 쓰이며, null까지 들어갈 수 있는 관계로 이렇게 했다.
@@ -181,7 +182,7 @@ public class Account {
 				remaining =  mediaFeed.getRemainingLimitStatus();// 여기서도 exception 날 수 있으니 값을 바로 return하지 않는다.
 			}
 		} catch(InstagramException e) {
-			Logger.printException("LIMIT" + e.getMessage());
+			Logger.printException(e);
 		}
 		
 		return remaining;

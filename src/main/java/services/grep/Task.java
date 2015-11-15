@@ -69,7 +69,7 @@ public class Task extends Thread implements AccountCallback {
 	
 	@Override
 	public void onAccountLimitExceeded(Long bound) {// limit exceeded - 새 account를 요청해야 한다.
-		Logger.printException("Limit exceeded");
+		Logger.printMessage("Limit exceeded");
 
 		account.setStatus(Account.Status.UNAVAILABLE);// acc 변화가 빨라야 observer와의 충돌이 안생긴다.
 		
@@ -78,14 +78,14 @@ public class Task extends Thread implements AccountCallback {
 
 	@Override
 	public void onAccountExceptionOccurred(Long bound) {// account occur - 다시 실행되어야 한다.
-		Logger.printException("Exception occurred");
+		Logger.printMessage("Exception occurred");
 
 		callback.onTaskUnexpectedlyStopped(this, bound);// ACC : WORKING, TASK : UNAVAILABLE
 	}
 
 	@Override
 	public void onAccountRangeDone() {// range done - 끝난 것.
-		Logger.printException("Range done");
+		Logger.printMessage("Range done");
 		
 		account.updateStatus();// 다 썼으니까 refresh 한번 해준다.(working 상태가 아니게 만드는 의미도 있다.)
 		
@@ -94,7 +94,7 @@ public class Task extends Thread implements AccountCallback {
 	
 	@Override
 	public void onAccountStoringFailed(Long bound) {
-		Logger.printException("Storing failed");
+		Logger.printMessage("Storing failed");
 		
 		// 다른 데서라도 쓰이게 한다. working 이던 것들도 어차피 task가 꺼지므로 update되어야 한다. 하지만 곧 다른 task들도 마찬가지로 꺼질 것이다.
 		account.updateStatus();
