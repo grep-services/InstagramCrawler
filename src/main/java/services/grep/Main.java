@@ -8,6 +8,7 @@ import java.util.List;
 
 import org.apache.commons.lang3.Range;
 
+import main.java.services.grep.Database.DatabaseCallback;
 import main.java.services.grep.Task.TaskCallback;
 
 /**
@@ -23,27 +24,22 @@ import main.java.services.grep.Task.TaskCallback;
  *
  */
 
-public class Main implements TaskCallback {
+public class Main implements TaskCallback, DatabaseCallback {
 
 	final String tag = "먹스타그램";
 	
 	List<Account> accounts;
 	List<Task> tasks;
 	
+	private long start, finish;
+	private long lower = 0, upper = 1069993533294892048l, diff = upper - lower;
+	private long done = 0;
+	
 	public Main() {
-		initDatabase();
 		initAccounts();// accounts는 file로 받는 것이 더 빠를듯.
 		initTasks();// schedule에 맞게 tasks 구성해준다.
 		
 		start();
-	}
-	
-	public void initDatabase() {
-		Database.getInstance().init();
-	}
-	
-	public void releaseDatabase() {
-		Database.getInstance().release();
 	}
 	
 	public void stopTask(Task task) {
@@ -110,7 +106,7 @@ public class Main implements TaskCallback {
 	
 	@Override
 	public void onTaskAccountDischarged(Task task, long bound) {
-		Logger.printMessage("Need account");
+		Logger.printMessage("<Task> Need account");
 		
 		pauseTask(task);
 		
@@ -123,7 +119,7 @@ public class Main implements TaskCallback {
 
 	@Override
 	public void onTaskUnexpectedlyStopped(Task task, long bound) {
-		Logger.printMessage("Task restart");
+		Logger.printMessage("<Task> Stopped and restart");
 		
 		pauseTask(task);
 		
@@ -134,18 +130,27 @@ public class Main implements TaskCallback {
 
 	@Override
 	public void onTaskJobCompleted(Task task) {
-		Logger.printMessage("Job completed");
+		Logger.printMessage("<Task> Job completed");
 		
 		stopTask(task);
 	}
 	
 	@Override
-	public void onTaskIncompletelyFinished(Task task, long bound) {
-		Logger.printMessage("Incompletely finished : " + task.getRange().getMinimum() + ", " + bound);
+	public void onTaskIncompletelyFinished(Task task, long bound) {// 아무래도, 1개의 범위가 아닐 것이다.
+		Logger.printMessage("<Task> Incompletely finished : " + task.getRange().getMinimum() + ", " + bound);
 		
 		stopTask(task);
 		
 		resizeTask(task, bound);// stop 했어도 그래도 resizing 해두기는 한다.
+	}
+
+	@Override
+	public synchronized void onDatabaseWritten(int written) {
+		done += written;
+	}
+	
+	public long calculateRemainingTime() {
+		return 0;
 	}
 
 	public void start() {
@@ -154,25 +159,21 @@ public class Main implements TaskCallback {
 	
 	// 현재 알고리즘은 단순하다. schedule 만들고, schedule만큼 tasks 만든다.
 	public void initTasks() {
-		long min = 0;
-		long max = 1069993533294892048l;
-		long diff = max - min;
-		
 		tasks = new ArrayList<Task>();
 		
 		// 간단하게 하려 해도 그 간단하게 하려는 것 때문에 복잡해진다. 그냥 풀어서 쓴다.
 		if(diff == 0) {
-			tasks.add(new Task(tag, Range.between(min, min), this));
+			tasks.add(new Task(tag, Range.between(lower, lower), this));
 		} else if(diff < accounts.size()) {// 상식적으로 accounts가 수백개가 될 리가 없다.
-			tasks.add(new Task(tag, Range.between(min, max), this));
+			tasks.add(new Task(tag, Range.between(lower, upper), this));
 		} else {
 			long size = diff / accounts.size();// 일단 교대 안해본다.(속도상 exceeded가 안생길 것 같기도 해서)
 			
 			for(int i = 0; i < accounts.size(); i++) {
 				if(i < accounts.size() - 1) {
-					tasks.add(new Task(tag, Range.between(min + (i * size), min + ((i + 1) * size - 1)), this));
+					tasks.add(new Task(tag, Range.between(lower + (i * size), lower + ((i + 1) * size - 1)), this));
 				} else {
-					tasks.add(new Task(tag, Range.between(min + (i * size), max), this));// n빵이 딱 떨어지는건 아니다.
+					tasks.add(new Task(tag, Range.between(lower + (i * size), upper), this));// n빵이 딱 떨어지는건 아니다.
 				}
 			}
 		}
@@ -219,6 +220,8 @@ public class Main implements TaskCallback {
 		
 		@Override
 		public void run() {
+			start = System.currentTimeMillis();
+			
 			while(!isAllTasksCompleted()) {
 				for(Task task : tasks) {
 					if(task.getStatus() == Task.Status.UNAVAILABLE) {
@@ -241,7 +244,7 @@ public class Main implements TaskCallback {
 				}
 			}
 			
-			releaseDatabase();
+			finish = System.currentTimeMillis();
 		}
 		
 	}
