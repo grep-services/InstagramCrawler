@@ -3,6 +3,7 @@ import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -147,10 +148,20 @@ public class Main implements TaskCallback, DatabaseCallback {
 	@Override
 	public synchronized void onDatabaseWritten(int written) {
 		done += written;
+		
+		Logger.printMessage(String.format("<Database> Progress : %s / %s. %.2f\\% done. %s remains.", done, diff, getProgress(), getRemainingTime()));
 	}
 	
-	public long calculateRemainingTime() {
-		return 0;
+	public float getProgress() {
+		return ((done / (float)diff) * 100);
+	}
+	
+	public String getRemainingTime() {
+		long sec = (long)((finish - start) * (diff / (float)done));
+		
+		Duration duration = Duration.ofSeconds(sec);
+		
+		return duration.toString();
 	}
 
 	public void start() {

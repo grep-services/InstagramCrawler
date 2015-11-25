@@ -28,7 +28,7 @@ public class Database extends Thread {
 	
 	private Connection connection = null;
 	private Statement statement = null;
-	private String sql = "Insert into Instagram (sid, link) values (?,?)";
+	private String sql = "Insert into Instagram (mid, link) values (?,?)";
 	private PreparedStatement preparedStatement = null;
 	private static final int batch = 1000;
 	

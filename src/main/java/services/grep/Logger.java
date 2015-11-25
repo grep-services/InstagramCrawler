@@ -11,9 +11,6 @@ package main.java.services.grep;
 
 public class Logger {
 
-	private static int progress = 0;
-	private static long startTime = 0;
-	
 	public Logger() {
 	}
 	
@@ -23,17 +20,6 @@ public class Logger {
 	
 	public static void printMessage(String msg) {
 		System.out.println("Message : " + msg);
-	}
-	
-	// 여기서 다 하기는 힘들다. main과 연결하도록 한다.
-	public synchronized static void printProgress(int written) {
-		if(progress == 0) {
-			startTime = System.currentTimeMillis();
-		}
-		
-		progress += written;
-		
-		System.out.println("Progress : " + progress);
 	}
 
 }
