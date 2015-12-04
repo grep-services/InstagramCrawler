@@ -34,8 +34,6 @@ public class Task extends Thread implements AccountCallback {
 		this.callback = callback;
 		
 		status = Status.UNAVAILABLE;
-		
-		setDaemon(true);
 	}
 	
 	// constructor 이외에도 set 될 일들 많다.
@@ -102,6 +100,10 @@ public class Task extends Thread implements AccountCallback {
 	
 	public Range<Long> getRange() {
 		return range;
+	}
+	
+	public TaskCallback getCallback() {
+		return callback;
 	}
 
 	public interface TaskCallback {

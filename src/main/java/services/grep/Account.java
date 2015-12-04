@@ -5,10 +5,14 @@ import java.util.List;
 import org.jinstagram.Instagram;
 import org.jinstagram.auth.model.Token;
 import org.jinstagram.entity.common.Pagination;
+import org.jinstagram.entity.tags.TagInfoData;
+import org.jinstagram.entity.tags.TagInfoFeed;
 import org.jinstagram.entity.tags.TagMediaFeed;
 import org.jinstagram.entity.users.feed.MediaFeed;
 import org.jinstagram.entity.users.feed.MediaFeedData;
 import org.jinstagram.exceptions.InstagramException;
+
+import main.java.services.grep.Database.DatabaseCallback;
 
 /**
  * 
@@ -58,6 +62,28 @@ public class Account {
 		this.callback = callback;
 	}
 	
+	public long getTagCount(String tag) {
+		tag = "tfoslarutan";
+		
+		long count = 0;
+		
+		try {
+			TagInfoFeed info = instagram.getTagInfo(tag);
+			
+			if(info != null) {// 사실 문제없어보이긴 하지만 확신할 수 없는 만큼 null check는 한다.
+				TagInfoData data = info.getTagInfo();
+				
+				if(data != null) {
+					count = data.getMediaCount();
+				}
+			}
+		} catch (InstagramException e) {
+			Logger.printException(e);
+		}
+		
+		return count;
+	}
+	
 	public void writeListToDB(List<MediaFeedData> list) {
 		/*
 		 * thread로 돌기 때문에 callback은 여기의 결과와 상관없이 진행할 수밖에 없다.
@@ -65,6 +91,22 @@ public class Account {
 		 * 결국, 쓰는 과정의 thread에서 문제 생기면, 그것은 기록으로 끝날 수밖에 없다.
 		 */
 		// split, allocation, start
+		// 일단 1개로 진행해본다.
+		DatabaseCallback callback = ((DatabaseCallback) ((Task) this.callback).getCallback());
+		
+		Database database = new Database(list, callback);
+		
+		database.start();
+		
+		/*
+		 * 주기적 write가 아닌만큼 wait해도 무방하다 생각
+		 * 문제 있다면 없앤다.
+		 */
+		try {
+			database.join();
+		} catch (InterruptedException e) {
+			Logger.printException(e);
+		}
 	}
 	
 	// string으로 더 많이 쓰이며, null까지 들어갈 수 있는 관계로 이렇게 했다.

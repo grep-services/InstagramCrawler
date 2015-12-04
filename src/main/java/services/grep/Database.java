@@ -28,7 +28,7 @@ public class Database extends Thread {
 	
 	private Connection connection = null;
 	private Statement statement = null;
-	private String sql = "Insert into Instagram (mid, link) values (?,?)";
+	private String sql = "Insert into \"Instagram\" (mid, link) values (?,?)";
 	private PreparedStatement preparedStatement = null;
 	private static final int batch = 1000;
 	
@@ -67,14 +67,14 @@ public class Database extends Thread {
 		
 		try {
 			for(MediaFeedData item : list) {
-				preparedStatement.setLong(1, Long.valueOf(item.getId()));
+				preparedStatement.setLong(1, splitId(item.getId()));
 				preparedStatement.setString(2, item.getLink());
 				
 				preparedStatement.addBatch();
 				
 				count++;
 				
-				if(count % batch == 0 || count == list.size() - 1) {
+				if(count % batch == 0 || count == list.size()) {
 					int written = preparedStatement.executeBatch().length;// 일단 max_int까지 안가므로 large로 할 필요 없는 것 같다.
 					index += written;
 					
@@ -84,14 +84,19 @@ public class Database extends Thread {
 			}
 		} catch(SQLException e) {
 			Logger.printException(e);
+			Logger.printException(e.getNextException());
 		}
 		
 		if(index < list.size()) {
 			// 이제 이미 account는 다른데에 쓰이고 있을수도 있는만큼, 여기서의 exception은 여기서 처리한다.
-			Logger.printMessage(String.format("Database : writing failed. from %s to %s", list.get(list.size() - 1).getId(), list.get(index).getId()));
+			Logger.printMessage(String.format("Database : writing failed. from %d to %d", splitId(list.get(list.size() - 1).getId()), splitId(list.get(index).getId())));
 		}
 		
 		release();
+	}
+	
+	public long splitId(String id) {
+		return Long.valueOf(id.split("_")[0]);
 	}
 	
 	public void release() {

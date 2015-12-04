@@ -32,15 +32,45 @@ public class Main implements TaskCallback, DatabaseCallback {
 	List<Account> accounts;
 	List<Task> tasks;
 	
-	private long start, finish;
-	private long lower = 0, upper = 1069993533294892048l, diff = upper - lower;
-	private long done = 0;
+	private long start;
+	private long lower, upper, diff, visited;
+	private long size, done;
 	
-	public Main() {
+	public Main() {		
 		initAccounts();// accounts는 file로 받는 것이 더 빠를듯.
+		initSchedule();// task 하기 전에 schedule을 구성해야 한다.
 		initTasks();// schedule에 맞게 tasks 구성해준다.
 		
 		start();
+	}
+	
+	public void initSchedule() {
+		lower = 0;
+		upper = 1069993533294892048l;
+		diff = upper - lower;
+		visited = 0;
+		size = getItemSize();
+		done = 0;
+		
+		diff = 10000;
+		lower = upper - diff;
+	}
+	
+	// crawl해야 할 item의 total size를 구한다. 현재는 tag count로.
+	public long getItemSize() {
+		long size = -1;// default는 차라리 -1을 해야 logging에서 device by zero 피할 수 있다.
+		
+		for(Account account : accounts) {
+			account.updateStatus();// 원래같으면 task에 할당되기 전에는 모두 unavailable이었겠지만, 뭐 그전에 free가 된다 해도 별 상관 없다.
+			
+			if(account.getStatus() == Account.Status.FREE) {
+				size = account.getTagCount(tag);
+				
+				break;
+			}
+		}
+		
+		return size;
 	}
 	
 	public void stopTask(Task task) {
@@ -66,7 +96,39 @@ public class Main implements TaskCallback, DatabaseCallback {
 	}
 	
 	public void resizeTask(Task task, long bound) {
+		long visited = task.getRange().getMaximum() - bound;// maximum이 바뀔 것이므로 미리 보관해야 된다.
+		
 		task.setRange(Range.between(task.getRange().getMinimum(), bound));
+		
+		printTaskProgress(visited);
+	}
+	
+	public synchronized void printTaskProgress(long visited) {
+		this.visited += visited;
+		
+		Logger.printMessage(String.format("<Task> Progress : %d / %d. %.2f%% done in %s and %s remains.", this.visited, diff, getTaskProgress(), getTaskElapsedTime(), getTaskRemainingTime()));
+	}
+	
+	public float getTaskProgress() {
+		return (visited / (float) diff) * 100;
+	}
+	
+	public String getTaskElapsedTime() {
+		long sec = (long) (System.currentTimeMillis() - start);
+		
+		Duration duration = Duration.ofMillis(sec);
+		
+		return duration.toString();
+	}
+	
+	public String getTaskRemainingTime() {
+		long elapsed = System.currentTimeMillis() - start;
+		long remains = diff - visited;
+		long sec = (long) (remains / ((float) visited) * elapsed);
+		
+		Duration duration = Duration.ofMillis(sec);
+		
+		return duration.toString();
 	}
 	
 	public boolean isAllTasksCompleted() {
@@ -134,6 +196,8 @@ public class Main implements TaskCallback, DatabaseCallback {
 		Logger.printMessage("<Task> Job completed");
 		
 		stopTask(task);
+		
+		resizeTask(task, task.getRange().getMinimum());// 0로 해두고 하면, logging이 깔끔하다.
 	}
 	
 	@Override
@@ -145,27 +209,31 @@ public class Main implements TaskCallback, DatabaseCallback {
 		resizeTask(task, bound);// stop 했어도 그래도 resizing 해두기는 한다.
 	}
 
+	/*
+	 * 정확한 시간 추정을 위해서는 그냥 탐색하는 범위들의 sum을 diff에 대한 %로 계산하는 것이 제일 낫다.
+	 * 물론 written도 별도로 표시할 수 있을 것이다. 
+	 */
 	@Override
 	public synchronized void onDatabaseWritten(int written) {
 		done += written;
 		
-		Logger.printMessage(String.format("<Database> Progress : %s / %s. %.2f\\% done. %s remains.", done, diff, getProgress(), getRemainingTime()));
+		Logger.printMessage(String.format("<Database> Progress : %d / %d. %.2f%% done.", done, size, getDatabaseProgress()));
 	}
 	
-	public float getProgress() {
-		return ((done / (float)diff) * 100);
-	}
-	
-	public String getRemainingTime() {
-		long sec = (long)((finish - start) * (diff / (float)done));
-		
-		Duration duration = Duration.ofSeconds(sec);
-		
-		return duration.toString();
+	public float getDatabaseProgress() {
+		return ((done / (float) size) * 100);
 	}
 
 	public void start() {
-		new Observer().start();
+		Thread observer = new Observer();
+		
+		observer.start();
+		
+		try {
+			observer.join();
+		} catch (InterruptedException e) {
+			Logger.printException(e);
+		}
 	}
 	
 	// 현재 알고리즘은 단순하다. schedule 만들고, schedule만큼 tasks 만든다.
@@ -226,7 +294,6 @@ public class Main implements TaskCallback, DatabaseCallback {
 		final long PERIOD = 5 * 60 * 1000;// 5분
 		
 		public Observer() {
-			setDaemon(true);
 		}
 		
 		@Override
@@ -254,8 +321,6 @@ public class Main implements TaskCallback, DatabaseCallback {
 					Logger.printException(e);
 				}
 			}
-			
-			finish = System.currentTimeMillis();
 		}
 		
 	}
