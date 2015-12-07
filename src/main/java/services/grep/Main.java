@@ -36,7 +36,7 @@ public class Main implements TaskCallback, DatabaseCallback {
 	private long lower, upper, diff, visited;
 	private long size, done;
 	
-	public Main() {		
+	public Main() {
 		initAccounts();// accounts는 file로 받는 것이 더 빠를듯.
 		initSchedule();// task 하기 전에 schedule을 구성해야 한다.
 		initTasks();// schedule에 맞게 tasks 구성해준다.
@@ -52,8 +52,8 @@ public class Main implements TaskCallback, DatabaseCallback {
 		size = getItemSize();
 		done = 0;
 		
-		diff = 10000000000l;//10 ^ 10
-		lower = upper - diff;
+		//diff = 1000000000000l;//10 ^ 12
+		//lower = upper - diff;
 	}
 	
 	// crawl해야 할 item의 total size를 구한다. 현재는 tag count로.

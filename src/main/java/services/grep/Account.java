@@ -112,6 +112,7 @@ public class Account {
 		}
 	}
 	
+	// TODO: 장기적으로, ARG들 이제 LONG으로 바꾼다. 굳이 STRING 할 필요 없다.
 	// string으로 더 많이 쓰이며, null까지 들어갈 수 있는 관계로 이렇게 했다.
 	public void getListFromTag(String tag, String from, String to) {
 		List<MediaFeedData> result = null;
@@ -127,7 +128,12 @@ public class Account {
 			 * 그리고 next max는 말그대로 next의 것이므로, 현재 list는 from안에 다 들어올 수도 있다.
 			 * 참고로, hasnextpage가 안되는줄 알았는데 일단 되길래 쓴다. 이건 url 존재여부로 판단하는 것이다.
 			 */
-			if(!list.getPagination().hasNextPage() || list.getPagination().getNextMaxTagId().compareTo(from) < 0) {
+			if(!list.getPagination().hasNextPage() || Long.valueOf(list.getPagination().getNextMaxTagId()) < Long.valueOf(from)) {
+        		
+        		Logger.printMessage(!list.getPagination().hasNextPage() ? "no page" : "page");
+        		Logger.printMessage(list.getPagination().getNextMaxTagId().compareTo(from) < 0 ? "full" : "not full");
+        		Logger.printMessage("id : %s, from : %s, comp : %s", list.getPagination().getNextMaxTagId(), from, (list.getPagination().getNextMaxTagId().compareTo(from) < 0 ? "full" : "not full"));
+        		
 				result = filterList(list.getData(), from);
 
 				// 선 기록 후 보고, 그래야 차라리 기록 후 보고가 안되면 다시 덮어써지지, 반대로 되면 빈 공간이 생길 것.
@@ -153,7 +159,7 @@ public class Account {
 			
             while(true) {
             	// range check.
-            	if(!nextList.getPagination().hasNextPage() || nextList.getPagination().getNextMaxTagId().compareTo(from) < 0) {
+            	if(!nextList.getPagination().hasNextPage() || Long.valueOf(nextList.getPagination().getNextMaxTagId()) < Long.valueOf(from)) {
             		result.addAll(filterList(nextList.getData(), from));
             		
             		writeListToDB(result);
@@ -205,7 +211,8 @@ public class Account {
 		for(Iterator<MediaFeedData> iterator = list.iterator(); iterator.hasNext();) {
 			MediaFeedData item = iterator.next();
 			
-			if(item.getId().compareTo(bound) < 0) {// 아마 오름차순일 것이므로 그냥 끝까지 해야 한다.
+			// split 주의.
+			if(Long.valueOf(item.getId().split("_")[0]) < Long.valueOf(bound)) {// 아마 오름차순일 것이므로 그냥 끝까지 해야 한다.
 				iterator.remove();
 			}
 		}
