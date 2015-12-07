@@ -235,13 +235,11 @@ public class Main implements TaskCallback, DatabaseCallback {
 		}
 	}
 	
-	public void notifyTask(Task task) {
-		synchronized (task) {//TODO: 한번 빼보기.
-			try {
-				task.notify();
-			} catch (IllegalThreadStateException e) {
-				Logger.printException(e);
-			}
+	public void notifyTask(Task task) {// sync 겹쳐서 뺐지만, 반드시 sync 있어서 monitor 가지는 곳에서 해야한다.
+		try {
+			task.notify();
+		} catch (IllegalThreadStateException e) {
+			Logger.printException(e);
 		}
 	}
 
@@ -312,7 +310,6 @@ public class Main implements TaskCallback, DatabaseCallback {
 			reader = new BufferedReader(new FileReader("./src/accounts"));
 			
 			int index = 0;
-			
 			String line = null;
 			while((line = reader.readLine()) != null) {
 				if(line.startsWith("//")) {
@@ -323,11 +320,9 @@ public class Main implements TaskCallback, DatabaseCallback {
 				
 				Account account = new Account(array[0], array[1], array[2]);
 				
-				account.setAccountId(index ++);
+				account.setAccountId(index++);
 				
 				accounts.add(account);
-				
-				//accounts.add(new Account(array[0], array[1], array[2]));
 			}
 		} catch(FileNotFoundException e) {
 			Logger.printException(e);
@@ -370,6 +365,8 @@ public class Main implements TaskCallback, DatabaseCallback {
 								if(allocAccount(task)) {// 이미 pause, resize되어 있다. 할당해보고 되면 resume하고, 안되면 다시 pass.
 									resumeTask(task);
 								};
+								
+								notifyTask(task);
 							}// working일 경우는, 사실 exception이 났을 경운데, 그 경우는 처리되었을 것이라고 본다.
 						}
 					}

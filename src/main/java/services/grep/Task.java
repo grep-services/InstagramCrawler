@@ -57,11 +57,11 @@ public class Task extends Thread implements AccountCallback {
 
 	@Override
 	public void run() {
-		Logger.printMessage("<Task %d> Running", getTaskId());
+		Logger.printMessage("<Task %d> Running", id);
 		
 		while(status != Status.DONE) {
 			while(status == Status.WORKING) {// account, range 등이 exception 등에 의해 변경될 수 있다. 그 때 다시 working으로 돌리면서 진입한다.
-				Logger.printMessage("<Task %d> Running-in", getTaskId());
+				Logger.printMessage("<Task %d> Running-in", id);
 				
 				account.getListFromTag(tag, String.valueOf(range.getMinimum()), String.valueOf(range.getMaximum()));
 				
@@ -78,7 +78,7 @@ public class Task extends Thread implements AccountCallback {
 	
 	@Override
 	public void onAccountLimitExceeded(Long bound) {// limit exceeded - 새 account를 요청해야 한다.
-		Logger.printMessage("<Account> Limit exceeded");
+		Logger.printMessage("<Account %d> Limit exceeded", account.getAccountId());
 
 		account.setStatus(Account.Status.UNAVAILABLE);// acc 변화가 빨라야 observer와의 충돌이 안생긴다.
 		
@@ -87,16 +87,16 @@ public class Task extends Thread implements AccountCallback {
 
 	@Override
 	public void onAccountExceptionOccurred(Long bound) {// account occur - 다시 실행되어야 한다.
-		Logger.printMessage("<Account> Exception occurred");
+		Logger.printMessage("<Account %id> Exception occurred", account.getAccountId());
 
 		callback.onTaskUnexpectedlyStopped(this, bound);// ACC : WORKING, TASK : UNAVAILABLE
 	}
 
 	@Override
 	public void onAccountRangeDone() {// range done - 끝난 것.
-		Logger.printMessage("<Account %d> Range done", getTaskId());
+		Logger.printMessage("<Account %d> Range done", account.getAccountId());
 		
-		account.updateStatus();// 다 썼으니까 refresh 한번 해준다.(working 상태가 아니게 만드는 의미도 있다.)
+		account.setStatus(Account.Status.UNAVAILABLE);// 이제 working일 때는 pass하게 했으므로, 그냥 unavailable로 한다. 문제없다.
 		
 		callback.onTaskJobCompleted(this);// ACC : 모르고, TASK : DONE. BREAK;
 	}

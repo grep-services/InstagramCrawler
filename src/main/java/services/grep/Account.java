@@ -165,7 +165,7 @@ public class Account {
                     result.addAll(nextList.getData());
                     
                     if(result.size() % 100 == 0) {
-                    	Logger.printMessage("<Account %d> Gathering %d", ((Task) callback).getTaskId(), result.size());
+                    	Logger.printMessage("<Account %d> Gathering %d", id, result.size());
                     }
             	}
             	
@@ -231,6 +231,10 @@ public class Account {
 	}
 	
 	public void updateStatus() {
+		if(status == Status.WORKING) {// working일 때는 안하는게 좋고, 이 때의 refresh는, work 끝나고 task가 직접 해준다.
+			return;
+		}
+		
 		int remaining = getRateRemaining();
 		
 		if(remaining != -1) {
