@@ -21,5 +21,9 @@ public class Logger {
 	public static void printMessage(String msg) {
 		System.out.println("Message : " + msg);
 	}
+	
+	public static void printMessage(String format, Object... args) {
+		System.out.println("Message : " + String.format(format, args));
+	}
 
 }

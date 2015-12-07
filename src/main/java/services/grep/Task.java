@@ -23,12 +23,15 @@ public class Task extends Thread implements AccountCallback {
 	}
 	public Status status;
 	
+	int id;
 	String tag;
 	Account account;
 	Range<Long> range;
 	TaskCallback callback;
 	
 	public Task(String tag, Range<Long> range, TaskCallback callback) {
+		setDaemon(true);
+		
 		this.tag = tag;
 		this.range = range;
 		this.callback = callback;
@@ -54,9 +57,21 @@ public class Task extends Thread implements AccountCallback {
 
 	@Override
 	public void run() {
+		Logger.printMessage("<Task %d> Running", getTaskId());
+		
 		while(status != Status.DONE) {
 			while(status == Status.WORKING) {// account, range 등이 exception 등에 의해 변경될 수 있다. 그 때 다시 working으로 돌리면서 진입한다.
+				Logger.printMessage("<Task %d> Running-in", getTaskId());
+				
 				account.getListFromTag(tag, String.valueOf(range.getMinimum()), String.valueOf(range.getMaximum()));
+				
+				synchronized (this) {//TODO: 유효성 CHECK는 해보기.
+					try {
+						wait();
+					} catch (InterruptedException e) {
+						Logger.printException(e);
+					}
+				}
 			}
 		}
 	}
@@ -79,7 +94,7 @@ public class Task extends Thread implements AccountCallback {
 
 	@Override
 	public void onAccountRangeDone() {// range done - 끝난 것.
-		Logger.printMessage("<Account> Range done");
+		Logger.printMessage("<Account %d> Range done", getTaskId());
 		
 		account.updateStatus();// 다 썼으니까 refresh 한번 해준다.(working 상태가 아니게 만드는 의미도 있다.)
 		
@@ -100,6 +115,14 @@ public class Task extends Thread implements AccountCallback {
 	
 	public Range<Long> getRange() {
 		return range;
+	}
+	
+	public void setTaskId(int id) {
+		this.id = id;
+	}
+	
+	public int getTaskId() {
+		return id;
 	}
 	
 	public TaskCallback getCallback() {

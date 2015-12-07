@@ -37,6 +37,8 @@ public class Database extends Thread {
 	DatabaseCallback callback;
 	
 	public Database(List<MediaFeedData> list, DatabaseCallback callback) {
+		setDaemon(true);
+		
 		this.list = list;
 		this.callback = callback;
 		

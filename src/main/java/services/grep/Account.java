@@ -33,6 +33,8 @@ public class Account {
 	}
 	public Status status;
 	
+	int id;
+	
 	private final String clientId;// 현재는 확인용에밖에 쓸 일이 없다.
 	private final String clientSecret;
 	private final String accessToken;
@@ -63,8 +65,6 @@ public class Account {
 	}
 	
 	public long getTagCount(String tag) {
-		tag = "tfoslarutan";
-		
 		long count = 0;
 		
 		try {
@@ -85,6 +85,9 @@ public class Account {
 	}
 	
 	public void writeListToDB(List<MediaFeedData> list) {
+		if(list == null || list.isEmpty()) {
+			return;
+		}
 		/*
 		 * thread로 돌기 때문에 callback은 여기의 결과와 상관없이 진행할 수밖에 없다.
 		 * 그리고 여기에서는 list 쪼개고, thread들 start하도록 한다.
@@ -154,12 +157,16 @@ public class Account {
             		result.addAll(filterList(nextList.getData(), from));
             		
             		writeListToDB(result);
-            		
+
         			callback.onAccountRangeDone();
             		
             		break;// 일반적으로 정상적인 exit route.
             	} else {
                     result.addAll(nextList.getData());
+                    
+                    if(result.size() % 100 == 0) {
+                    	Logger.printMessage("<Account %d> Gathering %d", ((Task) callback).getTaskId(), result.size());
+                    }
             	}
             	
             	// query limit 다 쓴 경우
@@ -174,7 +181,9 @@ public class Account {
                 page = nextList.getPagination();
                 nextList = instagram.getRecentMediaNextPage(page);
             }
-		} catch(InstagramException e) {
+		//} catch(InstagramException e) {
+		} catch (Exception e) {// json malformed exception 등 예상치 못한 exception들도 더 있는 것 같다.
+			Logger.printException(e);// 출력은 해준다.
 			/*
 			 * 여기는, exceeded 뿐만 아니라, 일반적인 ioexception 등 여러가지 올 수 있다.
 			 * 판단 기준은 result뿐이며, 일반 list인 관계로 max id 같은 것 없다.
@@ -182,6 +191,7 @@ public class Account {
 			 * 물론 result null 및 empty check는 수반되어야 한다.
 			 */
 			if(result == null || result.isEmpty()) {
+
 				callback.onAccountRangeDone();// 없어도 어쨌든 완료다.
 			} else {// result에의 대입 자체가 from을 넘어선 assign을 하지 않기 때문에 그 check를 할 필요는 없고, 다만 bound를 알려주면 된다.
 				writeListToDB(result);
@@ -238,6 +248,14 @@ public class Account {
 	
 	public Status getStatus() {
 		return status;
+	}
+	
+	public void setAccountId(int id) {
+		this.id = id;
+	}
+	
+	public int getAccountId() {
+		return id;
 	}
 	
 	public interface AccountCallback {

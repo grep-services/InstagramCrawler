@@ -46,13 +46,13 @@ public class Main implements TaskCallback, DatabaseCallback {
 	
 	public void initSchedule() {
 		lower = 0;
-		upper = 1069993533294892048l;
+		upper = 1134531520866960884l;// 10 ^ 18
 		diff = upper - lower;
 		visited = 0;
 		size = getItemSize();
 		done = 0;
 		
-		diff = 10000;
+		diff = 10000000000l;//10 ^ 10
 		lower = upper - diff;
 	}
 	
@@ -86,6 +86,8 @@ public class Main implements TaskCallback, DatabaseCallback {
 	}
 	
 	public void startTask(Task task) {
+		Logger.printMessage("<Task %d> Started", task.getTaskId());
+		
 		try {
 			task.setStatus(Task.Status.WORKING);
 			
@@ -103,10 +105,16 @@ public class Main implements TaskCallback, DatabaseCallback {
 		printTaskProgress(visited);
 	}
 	
-	public synchronized void printTaskProgress(long visited) {
-		this.visited += visited;
-		
-		Logger.printMessage(String.format("<Task> Progress : %d / %d. %.2f%% done in %s and %s remains.", this.visited, diff, getTaskProgress(), getTaskElapsedTime(), getTaskRemainingTime()));
+	public void printTaskProgress() {
+		printTaskProgress(0);
+	}
+
+	public void printTaskProgress(long visited) {
+		synchronized (this) {
+			this.visited += visited;
+			
+			Logger.printMessage("<Task> Progress : %d / %d. %.2f%% done in %s and %s remains.", this.visited, diff, getTaskProgress(), getTaskElapsedTime(), getTaskRemainingTime());
+		}
 	}
 	
 	public float getTaskProgress() {
@@ -145,7 +153,7 @@ public class Main implements TaskCallback, DatabaseCallback {
 		return completed;
 	}
 	
-	public synchronized boolean allocAccount(Task task) {// main 및 observer에서 access될 수 있으므로 sync.
+	public boolean allocAccount(Task task) {// main 및 observer에서 access될 수 있으므로 sync.
 		Account newAccount = null;
 		
 		for(Account account : accounts) {// 어차피 기존 account는 exception 날수도.
@@ -161,6 +169,8 @@ public class Main implements TaskCallback, DatabaseCallback {
 		if(newAccount != null) {
 			task.setAccount(newAccount);
 			
+			Logger.printMessage("<Task %d - Account %d> Allocated", task.getTaskId(), newAccount.getAccountId());
+			
 			return true;
 		} else {
 			return false;
@@ -169,55 +179,81 @@ public class Main implements TaskCallback, DatabaseCallback {
 	
 	@Override
 	public void onTaskAccountDischarged(Task task, long bound) {
-		Logger.printMessage("<Task> Need account");
-		
-		pauseTask(task);
-		
-		resizeTask(task, bound);// 지금 실패하고 observer에 의해 나중에 실행될 수도 있지만, 그럴 때 resize할 수가 없으므로, 여기서 미리 한다.
-		
-		if(allocAccount(task)) {// acc 할당 성공했을 때만 resume하고, 그렇지 않을 때는 그냥 observer로 돌면서 기다린다.
-			resumeTask(task);
-		};
+		synchronized (task) {
+			Logger.printMessage("<Task %d> Need account", task.getTaskId());
+			
+			pauseTask(task);
+			
+			resizeTask(task, bound);// 지금 실패하고 observer에 의해 나중에 실행될 수도 있지만, 그럴 때 resize할 수가 없으므로, 여기서 미리 한다.
+			
+			if(allocAccount(task)) {// acc 할당 성공했을 때만 resume하고, 그렇지 않을 때는 그냥 observer로 돌면서 기다린다.
+				resumeTask(task);
+			};
+			
+			notifyTask(task);
+		}
 	}
 
 	@Override
 	public void onTaskUnexpectedlyStopped(Task task, long bound) {
-		Logger.printMessage("<Task> Stopped and restart");
-		
-		pauseTask(task);
-		
-		resizeTask(task, bound);
-		
-		resumeTask(task);
+		synchronized (task) {
+			Logger.printMessage("<Task %d> Stopped and restart", task.getTaskId());
+			
+			pauseTask(task);
+			
+			resizeTask(task, bound);
+			
+			resumeTask(task);
+			
+			notifyTask(task);
+		}
 	}
 
 	@Override
 	public void onTaskJobCompleted(Task task) {
-		Logger.printMessage("<Task> Job completed");
-		
-		stopTask(task);
-		
-		resizeTask(task, task.getRange().getMinimum());// 0로 해두고 하면, logging이 깔끔하다.
+		synchronized (task) {
+			Logger.printMessage("<Task %d> Job completed ", task.getTaskId());
+			
+			stopTask(task);
+			
+			resizeTask(task, task.getRange().getMinimum());// 0로 해두고 하면, logging이 깔끔하다.
+			
+			notifyTask(task);
+		}
 	}
 	
 	@Override
 	public void onTaskIncompletelyFinished(Task task, long bound) {// 아무래도, 1개의 범위가 아닐 것이다.
-		Logger.printMessage("<Task> Incompletely finished : " + task.getRange().getMinimum() + ", " + bound);
-		
-		stopTask(task);
-		
-		resizeTask(task, bound);// stop 했어도 그래도 resizing 해두기는 한다.
+		synchronized (task) {
+			Logger.printMessage("<Task %d> Incompletely finished : %d, %d", task.getTaskId(), task.getRange().getMinimum(), bound);
+			
+			stopTask(task);
+			
+			resizeTask(task, bound);// stop 했어도 그래도 resizing 해두기는 한다.
+			
+			notifyTask(task);
+		}
+	}
+	
+	public void notifyTask(Task task) {
+		synchronized (task) {//TODO: 한번 빼보기.
+			try {
+				task.notify();
+			} catch (IllegalThreadStateException e) {
+				Logger.printException(e);
+			}
+		}
 	}
 
 	/*
 	 * 정확한 시간 추정을 위해서는 그냥 탐색하는 범위들의 sum을 diff에 대한 %로 계산하는 것이 제일 낫다.
-	 * 물론 written도 별도로 표시할 수 있을 것이다. 
+	 * 물론 written도 별도로 표시할 수 있을 것이다.
 	 */
 	@Override
 	public synchronized void onDatabaseWritten(int written) {
 		done += written;
 		
-		Logger.printMessage(String.format("<Database> Progress : %d / %d. %.2f%% done.", done, size, getDatabaseProgress()));
+		Logger.printMessage("<Database> Progress : %d / %d. %.2f%% done.", done, size, getDatabaseProgress());
 	}
 	
 	public float getDatabaseProgress() {
@@ -256,6 +292,15 @@ public class Main implements TaskCallback, DatabaseCallback {
 				}
 			}
 		}
+		
+		for(Task task : tasks) {
+			long min = task.getRange().getMinimum();
+			long max = task.getRange().getMaximum();
+			
+			task.setTaskId(tasks.indexOf(task));
+			
+			Logger.printMessage("<Task %d> Range : %d to %d. diff is %d.", task.getTaskId(), min, max, max - min);
+		}
 	}
 	
 	public void initAccounts() {
@@ -266,11 +311,23 @@ public class Main implements TaskCallback, DatabaseCallback {
 		try {
 			reader = new BufferedReader(new FileReader("./src/accounts"));
 			
+			int index = 0;
+			
 			String line = null;
 			while((line = reader.readLine()) != null) {
+				if(line.startsWith("//")) {
+					continue;
+				}
+				
 				String[] array = line.split("\\s*,\\s*", 3);
 				
-				accounts.add(new Account(array[0], array[1], array[2]));
+				Account account = new Account(array[0], array[1], array[2]);
+				
+				account.setAccountId(index ++);
+				
+				accounts.add(account);
+				
+				//accounts.add(new Account(array[0], array[1], array[2]));
 			}
 		} catch(FileNotFoundException e) {
 			Logger.printException(e);
@@ -294,6 +351,7 @@ public class Main implements TaskCallback, DatabaseCallback {
 		final long PERIOD = 5 * 60 * 1000;// 5분
 		
 		public Observer() {
+			setDaemon(true);
 		}
 		
 		@Override
@@ -302,16 +360,18 @@ public class Main implements TaskCallback, DatabaseCallback {
 			
 			while(!isAllTasksCompleted()) {
 				for(Task task : tasks) {
-					if(task.getStatus() == Task.Status.UNAVAILABLE) {
-						if(task.getAccount() == null) {// 원래 초기화는 밖에서 하려 했으나, 이것도 마찬가지로 한번에 안될 수 있으므로 여기서 했다.
-							if(allocAccount(task)) {
-								startTask(task);
-							}
-						} else if(task.getAccount().getStatus() == Account.Status.UNAVAILABLE) {// exceeded
-							if(allocAccount(task)) {// 이미 pause, resize되어 있다. 할당해보고 되면 resume하고, 안되면 다시 pass.
-								resumeTask(task);
-							};
-						}// working일 경우는, 사실 exception이 났을 경운데, 그 경우는 처리되었을 것이라고 본다.
+					synchronized (task) {// task done 동시 체크까지 다 sync 잡을순 없어도 여기선 sync해줘야 한다.
+						if(task.getStatus() == Task.Status.UNAVAILABLE) {
+							if(task.getAccount() == null) {// 원래 초기화는 밖에서 하려 했으나, 이것도 마찬가지로 한번에 안될 수 있으므로 여기서 했다.
+								if(allocAccount(task)) {
+									startTask(task);
+								}
+							} else if(task.getAccount().getStatus() == Account.Status.UNAVAILABLE) {// exceeded
+								if(allocAccount(task)) {// 이미 pause, resize되어 있다. 할당해보고 되면 resume하고, 안되면 다시 pass.
+									resumeTask(task);
+								};
+							}// working일 경우는, 사실 exception이 났을 경운데, 그 경우는 처리되었을 것이라고 본다.
+						}
 					}
 				}
 				
@@ -320,6 +380,8 @@ public class Main implements TaskCallback, DatabaseCallback {
 				} catch(InterruptedException e) {
 					Logger.printException(e);
 				}
+				
+				printTaskProgress();// task resizing은 주기가 일정하지 않으므로, 이런 것도 필요하다고 생각한다.
 			}
 		}
 		
