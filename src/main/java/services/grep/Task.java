@@ -87,7 +87,7 @@ public class Task extends Thread implements AccountCallback {
 
 	@Override
 	public void onAccountExceptionOccurred(Long bound) {// account occur - 다시 실행되어야 한다.
-		Logger.printMessage("<Account %id> Exception occurred", account.getAccountId());
+		Logger.printMessage("<Account %d> Exception occurred", account.getAccountId());
 
 		callback.onTaskUnexpectedlyStopped(this, bound);// ACC : WORKING, TASK : UNAVAILABLE
 	}
