@@ -41,6 +41,8 @@ public class Account {
 	
 	Instagram instagram;
 	
+	private static final int batch = 1000;
+	
 	AccountCallback callback;
 
 	public Account(String clientId, String clientSecret, String accessToken) {
@@ -165,8 +167,10 @@ public class Account {
             	} else {
                     result.addAll(nextList.getData());
                     
-                    if(result.size() % 100 == 0) {
+                    if(result.size() % batch == 0) {
                     	Logger.printMessage("<Account %d> Gathering %d", id, result.size());
+                    	
+                    	throw new Exception(String.format("<Account %d> Store and resuming.", id));
                     }
             	}
             	
@@ -181,10 +185,6 @@ public class Account {
             	
                 page = nextList.getPagination();
                 nextList = instagram.getRecentMediaNextPage(page);
-                
-                if(result.size() > 100) {
-                	throw new Exception("Exceed 100 exception");
-                }
             }
 		//} catch(InstagramException e) {
 		} catch (Exception e) {// json malformed exception 등 예상치 못한 exception들도 더 있는 것 같다.
