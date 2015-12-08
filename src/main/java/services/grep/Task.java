@@ -65,13 +65,7 @@ public class Task extends Thread implements AccountCallback {
 				
 				account.getListFromTag(tag, String.valueOf(range.getMinimum()), String.valueOf(range.getMaximum()));
 				
-				synchronized (this) {//TODO: 유효성 CHECK는 해보기.
-					try {
-						wait();
-					} catch (InterruptedException e) {
-						Logger.printException(e);
-					}
-				}
+				// pause할 필요 없다. 위 method가 스스로 return하기 전에 알아서 처리를 다 해둔다.
 			}
 		}
 	}
@@ -99,6 +93,34 @@ public class Task extends Thread implements AccountCallback {
 		account.setStatus(Account.Status.UNAVAILABLE);// 이제 working일 때는 pass하게 했으므로, 그냥 unavailable로 한다. 문제없다.
 		
 		callback.onTaskJobCompleted(this);// ACC : 모르고, TASK : DONE. BREAK;
+	}
+	
+	public void resizeTask(long bound) {
+		long visited = range.getMaximum() - bound;// maximum이 바뀔 것이므로 미리 보관해야 된다.
+		
+		setRange(Range.between(range.getMinimum(), bound));
+		
+		callback.onTaskResized(this, visited);
+	}
+	
+	public void startTask() {
+		Logger.printMessage("<Task %d> Started", id);
+		
+		try {
+			status = Status.WORKING;
+			
+			start();
+		} catch(IllegalThreadStateException e) {
+			Logger.printException(e);
+		}
+	}
+	
+	public void stopTask() {
+		status = Status.DONE;
+	}
+	
+	public void resumeTask() {
+		status = Status.WORKING;
 	}
 	
 	public void setStatus(Status status) {
@@ -134,6 +156,7 @@ public class Task extends Thread implements AccountCallback {
 		void onTaskUnexpectedlyStopped(Task task, long bound);
 		void onTaskJobCompleted(Task task);
 		void onTaskIncompletelyFinished(Task task, long bound);
+		void onTaskResized(Task task, long bound);
 	}
 	
 }

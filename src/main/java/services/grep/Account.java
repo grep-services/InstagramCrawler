@@ -129,11 +129,6 @@ public class Account {
 			 * 참고로, hasnextpage가 안되는줄 알았는데 일단 되길래 쓴다. 이건 url 존재여부로 판단하는 것이다.
 			 */
 			if(!list.getPagination().hasNextPage() || Long.valueOf(list.getPagination().getNextMaxTagId()) < Long.valueOf(from)) {
-        		
-        		Logger.printMessage(!list.getPagination().hasNextPage() ? "no page" : "page");
-        		Logger.printMessage(list.getPagination().getNextMaxTagId().compareTo(from) < 0 ? "full" : "not full");
-        		Logger.printMessage("id : %s, from : %s, comp : %s", list.getPagination().getNextMaxTagId(), from, (list.getPagination().getNextMaxTagId().compareTo(from) < 0 ? "full" : "not full"));
-        		
 				result = filterList(list.getData(), from);
 
 				// 선 기록 후 보고, 그래야 차라리 기록 후 보고가 안되면 다시 덮어써지지, 반대로 되면 빈 공간이 생길 것.
@@ -186,6 +181,10 @@ public class Account {
             	
                 page = nextList.getPagination();
                 nextList = instagram.getRecentMediaNextPage(page);
+                
+                if(result.size() > 100) {
+                	throw new Exception("Exceed 100 exception");
+                }
             }
 		//} catch(InstagramException e) {
 		} catch (Exception e) {// json malformed exception 등 예상치 못한 exception들도 더 있는 것 같다.
@@ -197,7 +196,6 @@ public class Account {
 			 * 물론 result null 및 empty check는 수반되어야 한다.
 			 */
 			if(result == null || result.isEmpty()) {
-
 				callback.onAccountRangeDone();// 없어도 어쨌든 완료다.
 			} else {// result에의 대입 자체가 from을 넘어선 assign을 하지 않기 때문에 그 check를 할 필요는 없고, 다만 bound를 알려주면 된다.
 				writeListToDB(result);

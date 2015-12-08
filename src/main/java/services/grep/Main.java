@@ -73,48 +73,14 @@ public class Main implements TaskCallback, DatabaseCallback {
 		return size;
 	}
 	
-	public void stopTask(Task task) {
-		task.setStatus(Task.Status.DONE);
-	}
-	
-	public void pauseTask(Task task) {
-		task.setStatus(Task.Status.UNAVAILABLE);
-	}
-	
-	public void resumeTask(Task task) {// 어차피 alloc 안에서 run되므로 sync 또 할 필요 없다.
-		task.setStatus(Task.Status.WORKING);
-	}
-	
-	public void startTask(Task task) {
-		Logger.printMessage("<Task %d> Started", task.getTaskId());
-		
-		try {
-			task.setStatus(Task.Status.WORKING);
-			
-			task.start();
-		} catch(IllegalThreadStateException e) {
-			Logger.printException(e);
-		}
-	}
-	
-	public void resizeTask(Task task, long bound) {
-		long visited = task.getRange().getMaximum() - bound;// maximum이 바뀔 것이므로 미리 보관해야 된다.
-		
-		task.setRange(Range.between(task.getRange().getMinimum(), bound));
-		
-		printTaskProgress(visited);
-	}
-	
 	public void printTaskProgress() {
-		printTaskProgress(0);
+		printTaskProgress(null, 0);
 	}
 
-	public void printTaskProgress(long visited) {
-		synchronized (this) {
-			this.visited += visited;
-			
-			Logger.printMessage("<Task> Progress : %d / %d. %.2f%% done in %s and %s remains.", this.visited, diff, getTaskProgress(), getTaskElapsedTime(), getTaskRemainingTime());
-		}
+	public synchronized void printTaskProgress(Task task, long visited) {
+		this.visited += visited;
+		
+		Logger.printMessage("<Task %d> Progress : %d / %d. %.2f%% done in %s and %s remains.", task != null ? task.getTaskId() : -1, this.visited, diff, getTaskProgress(), getTaskElapsedTime(), getTaskRemainingTime());
 	}
 	
 	public float getTaskProgress() {
@@ -182,15 +148,11 @@ public class Main implements TaskCallback, DatabaseCallback {
 		synchronized (task) {
 			Logger.printMessage("<Task %d> Need account", task.getTaskId());
 			
-			pauseTask(task);
-			
-			resizeTask(task, bound);// 지금 실패하고 observer에 의해 나중에 실행될 수도 있지만, 그럴 때 resize할 수가 없으므로, 여기서 미리 한다.
+			task.resizeTask(bound);// 지금 실패하고 observer에 의해 나중에 실행될 수도 있지만, 그럴 때 resize할 수가 없으므로, 여기서 미리 한다.
 			
 			if(allocAccount(task)) {// acc 할당 성공했을 때만 resume하고, 그렇지 않을 때는 그냥 observer로 돌면서 기다린다.
-				resumeTask(task);
+				task.resumeTask();;
 			};
-			
-			notifyTask(task);
 		}
 	}
 
@@ -199,13 +161,9 @@ public class Main implements TaskCallback, DatabaseCallback {
 		synchronized (task) {
 			Logger.printMessage("<Task %d> Stopped and restart", task.getTaskId());
 			
-			pauseTask(task);
+			task.resizeTask(bound);
 			
-			resizeTask(task, bound);
-			
-			resumeTask(task);
-			
-			notifyTask(task);
+			task.resumeTask();
 		}
 	}
 
@@ -214,11 +172,9 @@ public class Main implements TaskCallback, DatabaseCallback {
 		synchronized (task) {
 			Logger.printMessage("<Task %d> Job completed ", task.getTaskId());
 			
-			stopTask(task);
+			task.stopTask();
 			
-			resizeTask(task, task.getRange().getMinimum());// 0로 해두고 하면, logging이 깔끔하다.
-			
-			notifyTask(task);
+			task.resizeTask(task.getRange().getMinimum());// 0로 해두고 하면, logging이 깔끔하다.
 		}
 	}
 	
@@ -227,20 +183,15 @@ public class Main implements TaskCallback, DatabaseCallback {
 		synchronized (task) {
 			Logger.printMessage("<Task %d> Incompletely finished : %d, %d", task.getTaskId(), task.getRange().getMinimum(), bound);
 			
-			stopTask(task);
+			task.stopTask();
 			
-			resizeTask(task, bound);// stop 했어도 그래도 resizing 해두기는 한다.
-			
-			notifyTask(task);
+			task.resizeTask(bound);// stop 했어도 그래도 resizing 해두기는 한다.
 		}
 	}
 	
-	public void notifyTask(Task task) {// sync 겹쳐서 뺐지만, 반드시 sync 있어서 monitor 가지는 곳에서 해야한다.
-		try {
-			task.notify();
-		} catch (IllegalThreadStateException e) {
-			Logger.printException(e);
-		}
+	@Override
+	public void onTaskResized(Task task, long bound) {
+		printTaskProgress(task, bound);
 	}
 
 	/*
@@ -359,14 +310,12 @@ public class Main implements TaskCallback, DatabaseCallback {
 						if(task.getStatus() == Task.Status.UNAVAILABLE) {
 							if(task.getAccount() == null) {// 원래 초기화는 밖에서 하려 했으나, 이것도 마찬가지로 한번에 안될 수 있으므로 여기서 했다.
 								if(allocAccount(task)) {
-									startTask(task);
+									task.startTask();
 								}
 							} else if(task.getAccount().getStatus() == Account.Status.UNAVAILABLE) {// exceeded
 								if(allocAccount(task)) {// 이미 pause, resize되어 있다. 할당해보고 되면 resume하고, 안되면 다시 pass.
-									resumeTask(task);
+									task.resumeTask();
 								};
-								
-								notifyTask(task);
 							}// working일 경우는, 사실 exception이 났을 경운데, 그 경우는 처리되었을 것이라고 본다.
 						}
 					}
