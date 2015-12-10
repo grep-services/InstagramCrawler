@@ -77,7 +77,7 @@ public class Main implements TaskCallback, DatabaseCallback {
 		printTaskProgress(null, 0);
 	}
 
-	public synchronized void printTaskProgress(Task task, long visited) {
+	public synchronized void printTaskProgress(Task task, long visited) {// this에 대해서 sync가 필요한 것이다.
 		this.visited += visited;
 		
 		Logger.printMessage("<Task %d> Progress : %d / %d. %.2f%% done in %s and %s remains.", task != null ? task.getTaskId() : -1, this.visited, diff, getTaskProgress(), getTaskElapsedTime(), getTaskRemainingTime());
@@ -181,7 +181,7 @@ public class Main implements TaskCallback, DatabaseCallback {
 	@Override
 	public void onTaskIncompletelyFinished(Task task, long bound) {// 아무래도, 1개의 범위가 아닐 것이다.
 		synchronized (task) {
-			Logger.printMessage("<Task %d> Incompletely finished : %d, %d", task.getTaskId(), task.getRange().getMinimum(), bound);
+			Logger.printMessage("<Task %d> Incompletely finished : %d - %d", task.getTaskId(), task.getRange().getMinimum(), bound);
 			
 			task.stopTask();
 			
@@ -190,8 +190,23 @@ public class Main implements TaskCallback, DatabaseCallback {
 	}
 	
 	@Override
-	public void onTaskResized(Task task, long bound) {
-		printTaskProgress(task, bound);
+	public void onTaskResized(Task task, long visited) {
+		synchronized (task) {
+			// 이미 resize되어서 오므로 min, max 쓰면 된다.
+			Logger.printMessage("<Task %d> Resized : %d, %d - %d", task.getTaskId(), visited, task.getRange().getMinimum(), task.getRange().getMaximum());
+			
+			printTaskProgress(task, visited);
+		}
+	}
+	
+	@Override
+	public void onTaskTravelled(Task task, long visited) {
+		synchronized (task) {
+			// 특히 max에서 min까지 감소하면서 travelling하므로 그렇게 표기한다.
+			Logger.printMessage("<Task %d> Travelled : %d, %d - %d", task.getTaskId(), visited, task.getRange().getMaximum(), task.getRange().getMinimum());
+			
+			printTaskProgress(task, visited);
+		}
 	}
 
 	/*
