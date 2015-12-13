@@ -28,7 +28,7 @@ public class Database extends Thread {
 	
 	private Connection connection = null;
 	private Statement statement = null;
-	private String sql = "Insert into \"Instagram\" (mid, link) values (?,?)";
+	private String sql = "Insert into \"Instagram\" (media_id, link) values (?,?)";
 	private PreparedStatement preparedStatement = null;
 	private static final int batch = 1000;
 	
@@ -90,7 +90,14 @@ public class Database extends Thread {
 		}
 		
 		if(index < list.size()) {
-			// 이제 이미 account는 다른데에 쓰이고 있을수도 있는만큼, 여기서의 exception은 여기서 처리한다.
+			/*
+			 * account는 join해뒀기 때문에 다른 곳에 할당되지는 않을 것이다.
+			 * 하지만 당장 여기서 난 exception 결과 bound 등을 다시 callback으로 account에 보낸다 해도
+			 * 그것을 다시 resize 대상으로 잡고 하기에는 single range의 한계 및 복잡성 증가 문제가 있다.
+			 * 일단 지금으로서는 database writting에서 나는 exception은 기록을 해두고 남겨두는 것으로 끝낸다.
+			 * 어쨌든 현재는 writting 되든 말든 이미 retrive한 data에 대해서는 resizing하면서 진행하므로
+			 * data상에서의 문제는 있겠지만(하지만 기록을 해두므로 괜찮다.) 진행상의 문제는 없을 것이다. 
+			 */
 			Logger.printMessage(String.format("Database : writing failed. from %d to %d", splitId(list.get(list.size() - 1).getId()), splitId(list.get(index).getId())));
 		}
 		

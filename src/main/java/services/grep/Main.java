@@ -27,7 +27,7 @@ import main.java.services.grep.Task.TaskCallback;
 
 public class Main implements TaskCallback, DatabaseCallback {
 
-	final String tag = "먹스타그램";
+	final String tag = "ㅂㅈ";
 	
 	List<Account> accounts;
 	List<Task> tasks;
@@ -46,7 +46,7 @@ public class Main implements TaskCallback, DatabaseCallback {
 	
 	public void initSchedule() {
 		lower = 0;
-		upper = 1134531520866960884l;// 10 ^ 18
+		upper = getLastItemId();
 		diff = upper - lower;
 		visited = 0;
 		size = getItemSize();
@@ -73,6 +73,22 @@ public class Main implements TaskCallback, DatabaseCallback {
 		return size;
 	}
 	
+	public long getLastItemId() {
+		long id = 0;// 안나오면 그냥 0 to 0으로 끝난다.
+		
+		for(Account account : accounts) {
+			account.updateStatus();// 원래같으면 task에 할당되기 전에는 모두 unavailable이었겠지만, 뭐 그전에 free가 된다 해도 별 상관 없다.
+			
+			if(account.getStatus() == Account.Status.FREE) {
+				id = account.getLastMediaId(tag);
+				
+				break;
+			}
+		}
+		
+		return id;
+	}
+	
 	public void printTaskProgress() {
 		printTaskProgress(null, 0);
 	}
@@ -84,7 +100,7 @@ public class Main implements TaskCallback, DatabaseCallback {
 	}
 	
 	public float getTaskProgress() {
-		return (visited / (float) diff) * 100;
+		return diff > 0 ? (visited / (float) diff) * 100 : 100;
 	}
 	
 	public String getTaskElapsedTime() {
@@ -161,7 +177,9 @@ public class Main implements TaskCallback, DatabaseCallback {
 		synchronized (task) {
 			Logger.printMessage("<Task %d> Stopped and restart", task.getTaskId());
 			
-			task.resizeTask(bound);
+			if(bound < task.getRange().getMaximum()) {// 그대로일 경우는 굳이 resize할 필요 없다.
+				task.resizeTask(bound);
+			}
 			
 			task.resumeTask();
 		}
@@ -190,8 +208,8 @@ public class Main implements TaskCallback, DatabaseCallback {
 	}
 	
 	@Override
-	public void onTaskResized(Task task, long bound) {
-		printTaskProgress(task, bound);
+	public void onTaskResized(Task task, long size) {
+		printTaskProgress(task, size);
 	}
 
 	/*

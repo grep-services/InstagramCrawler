@@ -1,8 +1,8 @@
 package main.java.services.grep;
 
-import org.apache.commons.lang3.Range;
-
 import main.java.services.grep.Account.AccountCallback;
+
+import org.apache.commons.lang3.Range;
 
 /**
  * 
@@ -61,9 +61,7 @@ public class Task extends Thread implements AccountCallback {
 		
 		while(status != Status.DONE) {
 			while(status == Status.WORKING) {// account, range 등이 exception 등에 의해 변경될 수 있다. 그 때 다시 working으로 돌리면서 진입한다.
-				Logger.printMessage("<Task %d> Running-in", id);
-				
-				account.getListFromTag(tag, String.valueOf(range.getMinimum()), String.valueOf(range.getMaximum()));
+				account.getListFromTag(tag, range.getMinimum(), range.getMaximum());
 				
 				// pause할 필요 없다. 위 method가 스스로 return하기 전에 알아서 처리를 다 해둔다.
 			}
@@ -71,7 +69,7 @@ public class Task extends Thread implements AccountCallback {
 	}
 	
 	@Override
-	public void onAccountLimitExceeded(Long bound) {// limit exceeded - 새 account를 요청해야 한다.
+	public void onAccountLimitExceeded(long bound) {// limit exceeded - 새 account를 요청해야 한다.
 		Logger.printMessage("<Account %d> Limit exceeded", account.getAccountId());
 
 		account.setStatus(Account.Status.UNAVAILABLE);// acc 변화가 빨라야 observer와의 충돌이 안생긴다.
@@ -80,7 +78,7 @@ public class Task extends Thread implements AccountCallback {
 	}
 
 	@Override
-	public void onAccountExceptionOccurred(Long bound) {// account occur - 다시 실행되어야 한다.
+	public void onAccountExceptionOccurred(long bound) {// account occur - 다시 실행되어야 한다.
 		Logger.printMessage("<Account %d> Exception occurred", account.getAccountId());
 
 		callback.onTaskUnexpectedlyStopped(this, bound);// ACC : WORKING, TASK : UNAVAILABLE
@@ -96,11 +94,11 @@ public class Task extends Thread implements AccountCallback {
 	}
 	
 	public void resizeTask(long bound) {
-		long visited = range.getMaximum() - bound;// maximum이 바뀔 것이므로 미리 보관해야 된다.
+		long size = range.getMaximum() - bound;// maximum이 바뀔 것이므로 미리 보관해야 된다.
 		
 		setRange(Range.between(range.getMinimum(), bound));
 		
-		callback.onTaskResized(this, visited);
+		callback.onTaskResized(this, size);
 	}
 	
 	public void startTask() {
@@ -156,7 +154,7 @@ public class Task extends Thread implements AccountCallback {
 		void onTaskUnexpectedlyStopped(Task task, long bound);
 		void onTaskJobCompleted(Task task);
 		void onTaskIncompletelyFinished(Task task, long bound);
-		void onTaskResized(Task task, long bound);
+		void onTaskResized(Task task, long size);
 	}
 	
 }
