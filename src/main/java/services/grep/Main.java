@@ -239,7 +239,7 @@ public class Main implements TaskCallback, DatabaseCallback {
 	}
 	
 	public float getDatabaseProgress() {
-		return ((done / (float) size) * 100);
+		return size > 0 ? ((done / (float) size) * 100) : 100;
 	}
 
 	public void start() {
