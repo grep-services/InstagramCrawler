@@ -41,7 +41,8 @@ public class Account {
 	
 	Instagram instagram;
 	
-	private static final int batch = 1000;
+	private static final int query_batch = 1000;
+	private static final int database_batch = 10000;
 	
 	AccountCallback callback;
 
@@ -227,9 +228,11 @@ public class Account {
     			} else {
     				result.addAll(nextData);
     				
-                    if(result.size() % batch == 0) {
-                    	Logger.printMessage("<Account %d> Gathering %d", id, result.size());
-                    	
+                    if(result.size() % query_batch == 0) {
+                    	callback.onAccountQueried(query_batch);
+                    }
+                    
+                    if(result.size() % database_batch == 0) {
                     	throw new Exception(String.format("<Account %d> Store and resuming.", id));
                     }
     			}
@@ -415,6 +418,7 @@ public class Account {
 		void onAccountLimitExceeded(long bound);// limit exceeded
 		void onAccountExceptionOccurred(long bound);// exception occured
 		void onAccountRangeDone();// range done
+		void onAccountQueried(long size);
 	}
 
 }

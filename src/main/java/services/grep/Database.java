@@ -7,6 +7,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
 
+import org.jinstagram.entity.common.Location;
 import org.jinstagram.entity.users.feed.MediaFeedData;
 
 /**
@@ -69,7 +70,7 @@ public class Database extends Thread {
 		
 		try {
 			for(MediaFeedData item : list) {
-				preparedStatement.setLong(1, splitId(item.getId()));
+				preparedStatement.setLong(1, extractId(item.getId()));
 				preparedStatement.setString(2, item.getLink());
 				
 				preparedStatement.addBatch();
@@ -98,13 +99,13 @@ public class Database extends Thread {
 			 * 어쨌든 현재는 writting 되든 말든 이미 retrive한 data에 대해서는 resizing하면서 진행하므로
 			 * data상에서의 문제는 있겠지만(하지만 기록을 해두므로 괜찮다.) 진행상의 문제는 없을 것이다. 
 			 */
-			Logger.printMessage(String.format("Database : writing failed. from %d to %d", splitId(list.get(list.size() - 1).getId()), splitId(list.get(index).getId())));
+			Logger.printMessage(String.format("Database : writing failed. from %d to %d", extractId(list.get(list.size() - 1).getId()), extractId(list.get(index).getId())));
 		}
 		
 		release();
 	}
 	
-	public long splitId(String id) {
+	public long extractId(String id) {
 		return Long.valueOf(id.split("_")[0]);
 	}
 	

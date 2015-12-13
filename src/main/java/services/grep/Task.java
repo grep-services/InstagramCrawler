@@ -93,6 +93,13 @@ public class Task extends Thread implements AccountCallback {
 		callback.onTaskJobCompleted(this);// ACC : 모르고, TASK : DONE. BREAK;
 	}
 	
+	@Override
+	public void onAccountQueried(long size) {
+		Logger.printMessage("<Account %d> Queried periodically - %d", account.getAccountId(), size);
+		
+		callback.onTaskTravelled(this, size);
+	}
+
 	public void resizeTask(long bound) {
 		long size = range.getMaximum() - bound;// maximum이 바뀔 것이므로 미리 보관해야 된다.
 		
@@ -154,7 +161,8 @@ public class Task extends Thread implements AccountCallback {
 		void onTaskUnexpectedlyStopped(Task task, long bound);
 		void onTaskJobCompleted(Task task);
 		void onTaskIncompletelyFinished(Task task, long bound);
-		void onTaskResized(Task task, long size);
+		void onTaskResized(Task task, long visited);
+		void onTaskTravelled(Task task, long visited);
 	}
 	
 }
