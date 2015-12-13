@@ -248,10 +248,12 @@ public class Main implements TaskCallback, DatabaseCallback {
 		observer.start();
 		
 		try {
-			observer.join();
+			observer.join();//TODO: 나중에는 task들마다 join 달아서 observer와 상관없이 바로 끝낼 수 있도록(물론 observer도 종료되게) 해본다.
 		} catch (InterruptedException e) {
 			Logger.printException(e);
 		}
+		
+		Logger.printMessage("<Task> All tasks finished.");
 	}
 	
 	// 현재 알고리즘은 단순하다. schedule 만들고, schedule만큼 tasks 만든다.
@@ -326,7 +328,7 @@ public class Main implements TaskCallback, DatabaseCallback {
 	}
 	
 	class Observer extends Thread {
-
+		
 		final long PERIOD = 5 * 60 * 1000;// 5분
 		
 		public Observer() {
@@ -337,7 +339,7 @@ public class Main implements TaskCallback, DatabaseCallback {
 		public void run() {
 			start = System.currentTimeMillis();
 			
-			while(!isAllTasksCompleted()) {
+			while(true) {
 				for(Task task : tasks) {
 					synchronized (task) {// task done 동시 체크까지 다 sync 잡을순 없어도 여기선 sync해줘야 한다.
 						if(task.getStatus() == Task.Status.UNAVAILABLE) {
@@ -358,6 +360,10 @@ public class Main implements TaskCallback, DatabaseCallback {
 					Thread.sleep(PERIOD);
 				} catch(InterruptedException e) {
 					Logger.printException(e);
+				}
+				
+				if(isAllTasksCompleted()) {
+					break;
 				}
 				
 				printTaskProgress();// task resizing은 주기가 일정하지 않으므로, 이런 것도 필요하다고 생각한다.
