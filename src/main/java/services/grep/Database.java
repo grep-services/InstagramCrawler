@@ -5,8 +5,11 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Timestamp;
 import java.util.List;
 
+import org.jinstagram.entity.common.Images;
+import org.jinstagram.entity.common.Location;
 import org.jinstagram.entity.users.feed.MediaFeedData;
 
 /**
@@ -28,9 +31,9 @@ public class Database extends Thread {
 	
 	private Connection connection = null;
 	private Statement statement = null;
-	private String sql = "Insert into \"Instagram\" (media_id, link) values (?,?)";
+	private String sql = "Insert into \"Instagram\" (media_id, created_time, link_url, image_url, likes_count, text, comments_count, user_id, user_name, location_name, latitude, longitude) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 	private PreparedStatement preparedStatement = null;
-	private static final int batch = 1000;
+	//private static final int batch = 1000;
 	
 	private List<MediaFeedData> list = null;
 	
@@ -70,10 +73,20 @@ public class Database extends Thread {
 		try {
 			for(MediaFeedData item : list) {
 				preparedStatement.setLong(1, extractId(item.getId()));
-				preparedStatement.setString(2, item.getLink());
+				preparedStatement.setTimestamp(2, extractTimestamp(item.getCreatedTime()));// not milli but sec
+				preparedStatement.setString(3, item.getLink());
+				preparedStatement.setString(4, extractImageUrl(item));// not null but may not be full
+				preparedStatement.setInt(5, item.getLikes().getCount());// not null
+				preparedStatement.setString(6, extractText(item));// caption can be null
+				preparedStatement.setInt(7, item.getComments().getCount());// not null
+				preparedStatement.setLong(8, Long.valueOf(item.getUser().getId()));// should be long
+				preparedStatement.setString(9, item.getUser().getUserName());// not null
+				preparedStatement.setString(10, extractLocation(item.getLocation()));// location can be null
+				preparedStatement.setString(11, extractLatitude(item.getLocation()));// location can be null
+				preparedStatement.setString(12, extractLongitude(item.getLocation()));// location can be null
 				
 				preparedStatement.addBatch();
-				
+				/*
 				count++;
 				
 				if(count % batch == 0 || count == list.size()) {
@@ -82,8 +95,13 @@ public class Database extends Thread {
 					
 					//Logger.printProgress(written);
 					callback.onDatabaseWritten(written);
-				}
+				}*/
 			}
+			
+			int written = preparedStatement.executeBatch().length;// 일단 max_int까지 안가므로 large로 할 필요 없는 것 같다.
+			index += written;
+			
+			callback.onDatabaseWritten(written);
 		} catch(SQLException e) {
 			Logger.printException(e);
 			Logger.printException(e.getNextException());
@@ -106,6 +124,43 @@ public class Database extends Thread {
 	
 	public long extractId(String id) {
 		return Long.valueOf(id.split("_")[0]);
+	}
+	
+	public Timestamp extractTimestamp(String timeString) {
+		return new Timestamp(Long.valueOf(timeString) * 1000);
+	}
+	
+	public String extractText(MediaFeedData item) {
+		return item.getCaption() != null ? item.getCaption().getText() : null;
+	}
+	
+	// image 여러개 저장하기에는 좀 골치아프다. 일단 한개만 한다. 어차피 무조건 있다.
+	public String extractImageUrl(MediaFeedData item) {
+		String url = null;
+		
+		Images images = item.getImages();
+		
+		if(images.getStandardResolution() != null) {
+			url = images.getStandardResolution().getImageUrl();
+		} else if(images.getLowResolution() != null) {
+			url = images.getLowResolution().getImageUrl();
+		} else if(images.getThumbnail() != null) {
+			url = images.getThumbnail().getImageUrl();
+		}
+		
+		return url;
+	}
+	
+	public String extractLocation(Location location) {
+		return location != null ? location.getName() : null;
+	}
+	
+	public String extractLatitude(Location location) {
+		return location != null ? String.valueOf(location.getLatitude()) : null;
+	}
+	
+	public String extractLongitude(Location location) {
+		return location != null ? String.valueOf(location.getLongitude()) : null;
 	}
 	
 	public void release() {

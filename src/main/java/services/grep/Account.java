@@ -41,8 +41,10 @@ public class Account {
 	
 	Instagram instagram;
 	
-	private static final int query_batch = 1000;
-	private static final int database_batch = 10000;
+	//private static final int query_batch = 1000;
+	//private static final int database_batch = 10000;
+	
+	boolean interrupted = false;
 	
 	AccountCallback callback;
 
@@ -65,6 +67,10 @@ public class Account {
 	// task에 할당될 때마다 바뀔 수 있다.
 	public void setCallback(AccountCallback callback) {
 		this.callback = callback;
+	}
+	
+	public void interrupt() {
+		interrupted = true;
 	}
 	
 	public long getTagCount(String tag) {
@@ -105,264 +111,98 @@ public class Account {
 		return id;
 	}
 	
-	public void writeListToDB(List<MediaFeedData> list) {
-		if(list == null || list.isEmpty()) {
-			return;
-		}
-		/*
-		 * thread로 돌기 때문에 callback은 여기의 결과와 상관없이 진행할 수밖에 없다.
-		 * 그리고 여기에서는 list 쪼개고, thread들 start하도록 한다.
-		 * 결국, 쓰는 과정의 thread에서 문제 생기면, 그것은 기록으로 끝날 수밖에 없다.
-		 */
-		// split, allocation, start
-		// 일단 1개로 진행해본다.
-		DatabaseCallback callback = ((DatabaseCallback) ((Task) this.callback).getCallback());
-		
-		Database database = new Database(list, callback);
-		
-		database.start();
-		
-		/*
-		 * 주기적 write가 아닌만큼 wait해도 무방하다 생각
-		 * 문제 있다면 없앤다.
-		 */
-		try {
-			database.join();
-		} catch (InterruptedException e) {
-			Logger.printException(e);
-		}
-	}
-	
-	public void getListFromTag(String tag, long from, long to) {
+	/*
+	 * 너무 복잡하면 힘들다.
+	 * 여기서 하던 filtering은 밖으로 뺀다.
+	 * 그리고 여기서 처리하던 limit, ioexception, 그외 exception도 밖으로 뺀다.
+	 * db insertion도 밖으로 뺀다.
+	 * 즉, 여기서는 무조건 값만 받고, 자연스럽게 또는 exception에 의해 return한다.
+	 * 2차 exception은 애초에 여기서 바로 다시 시도하는 것이 아니기 때문에 고려할 필요 없다.
+	 */
+	public List<MediaFeedData> getListFromTag_(String tag, long from, long to) {
 		List<MediaFeedData> result = null;
 		
 		try {
 			// library가 object 구조를 좀 애매하게 해놓아서, 바로 loop 하기보다, 1 cycle은 직접 작성해주는 구조가 되었다.
 			TagMediaFeed list = instagram.getRecentMediaTags(tag, null, String.valueOf(to));
-			
 			Pagination page = list.getPagination();
-			
 			List<MediaFeedData> data = list.getData();
 			
-			/*
-			 * 1. empty check.
-			 * loop에서는 없겠지만 여기선 있을 수 있다.
-			 */
-			if(data == null || data.isEmpty()) {
-				callback.onAccountRangeDone();
-				
-				return;
+			if(!addFilteredData(result, data, from, to)) {// filter가 안되어야만 다음으로 넘어가고, 아니면 그냥 그대로 끝이다.
+				if(page.hasNextPage()) {
+					MediaFeed nextList = instagram.getRecentMediaNextPage(page);
+					Pagination nextPage = nextList.getPagination();
+					List<MediaFeedData> nextData = nextList.getData();
+					
+		            while(true) {
+		            	if(!addFilteredData(nextData, result, from, to)) {// filter가 안되어야만 다음으로 넘어가고, 아니면 그냥 그대로 끝이다.
+		            		if(interrupted) {
+		            			interrupted = false;
+		            			
+		            			throw new Exception();
+		            		}
+		            		
+			    			if(nextPage.hasNextPage()) {
+				                nextList = instagram.getRecentMediaNextPage(nextPage);
+				                nextPage = nextList.getPagination();
+				                nextData = nextList.getData();
+			    			} else {
+			    				break;
+			    			}
+		            	} else {// if 자체가 while 안에서 실행되어야 되기 때문에 이렇게 else에서 break 걸어줘야 한다.
+		            		break;
+		            	}
+		            }
+				}
 			}
 			
-			/*
-			 * 2. boundary check.
-			 * page가 더 있든 말든 넘어가면 끝이다.
-			 * TODO: 다만, upper는 아직 확신하지 못한다.
-			 * 그리고 filter한 결과는 보존해준다.
-			 */
+			callback.onAccountRangeDone(result);
+		} catch (Exception e) {
+			//TODO: 복잡성 때문에 제거했지만, 필요하다면 limit, io, etc 등 exception 이유 구분해서 처리 가능.
+			callback.onAccountExceptionOccured(result);
+		}
+		
+		return result;
+	}
+	
+	/*
+	 * getlist method의 전체적인 내용을 줄이고
+	 * 특히 null check 및 boolean check 관련 내용으로 인한 복잡화 방지를 위한 method.
+	 * return값은, 마지막이라는 의미이며, 이 값이 쓰이는 곳도 있다.(while)
+	 */
+	public boolean addFilteredData(List<MediaFeedData> list, List<MediaFeedData> data, long from, long to) {
+		if(data != null && !data.isEmpty()) {
 			boolean lower = extractId(data.get(data.size() - 1).getId()) < from;
 			boolean upper = extractId(data.get(0).getId()) > to;
 			
-			if(lower || upper) {
-				result = filterList(data, lower, upper, from, to);
+			for(Iterator<MediaFeedData> iterator = data.iterator(); iterator.hasNext();) {
+				MediaFeedData item = iterator.next();
 				
-				writeListToDB(result);
-				
-				callback.onAccountRangeDone();
-				
-				return;
+				if(extractId(item.getId()) < from) {
+					if(lower) {
+						iterator.remove();
+					}
+				} else if(extractId(item.getId()) > to) {
+					if(upper) {
+						iterator.remove();
+					}
+				}
+			}
+			
+			if(list != null) {
+				list.addAll(data);
 			} else {
-				result = data;
+				list = data;
 			}
 			
-			/*
-			 * 3. nextpage check.
-			 * not empty, boundary 괜찮고 해도, 마지막 page는 항상 있고, 거기서 끝내야 한다.
-			 * 이미 filtered이므로 그냥 쓰고 return하면 된다.
-			 */
-			if(!page.hasNextPage()) {
-				// 선 기록 후 보고, 그래야 차라리 기록 후 보고가 안되면 다시 덮어써지지, 반대로 되면 빈 공간이 생길 것.
-				writeListToDB(result);
-				
-				callback.onAccountRangeDone();
-				
-				return;
-			}
-			
-			/*
-			 * 4. limit check
-			 * last page까지 아닌 일반적인 page라 하더라도
-			 * 더이상 limit가 없을 때는 쓰고 return.
-			 * 특히, nextmax가 not null이다. 왜냐하면 null이라면 last page로서 위에서 걸렸을 것이기 때문이다.
-			 */
-			if(list.getRemainingLimitStatus() == 0) {
-				writeListToDB(result);
-				
-				callback.onAccountLimitExceeded(Long.valueOf(page.getNextMaxTagId()));// range 바로 잡기 좋게 next max로...
-        		
-        		return;// result;
-			}
-			
-			MediaFeed nextList = instagram.getRecentMediaNextPage(page);
-			Pagination nextPage = nextList.getPagination();
-			List<MediaFeedData> nextData = nextList.getData();
-			boolean nextLower = extractId(nextData.get(nextData.size() - 1).getId()) < from;
-			boolean nextUpper = extractId(nextData.get(0).getId()) > to;
-			
-            while(true) {
-    			/*
-    			 * 1. boundary check.
-    			 * page가 더 있든 말든 넘어가면 끝이다.
-    			 * TODO: 다만, upper는 아직 확신하지 못한다.
-    			 * 그리고 filter한 결과는 보존해준다.
-    			 */
-    			
-    			if(nextLower || nextUpper) {
-    				result.addAll(filterList(nextData, nextLower, nextUpper, from, to));
-    				
-    				writeListToDB(result);
-    				
-    				callback.onAccountRangeDone();
-    				
-    				return;
-    			} else {
-    				result.addAll(nextData);
-    				
-                    if(result.size() % query_batch == 0) {
-                    	callback.onAccountQueried(query_batch);
-                    }
-                    
-                    if(result.size() % database_batch == 0) {
-                    	throw new Exception(String.format("<Account %d> Store and resuming.", id));
-                    }
-    			}
-    			
-    			/*
-    			 * 2. nextpage check.
-    			 * not empty, boundary 괜찮고 해도, 마지막 page는 항상 있고, 거기서 끝내야 한다.
-    			 * 이미 filtered이므로 그냥 쓰고 return하면 된다.
-    			 */
-    			if(!nextPage.hasNextPage()) {
-    				// 선 기록 후 보고, 그래야 차라리 기록 후 보고가 안되면 다시 덮어써지지, 반대로 되면 빈 공간이 생길 것.
-    				writeListToDB(result);
-    				
-    				callback.onAccountRangeDone();
-    				
-    				return;
-    			}
-    			
-    			/*
-    			 * 3. limit check
-    			 * last page까지 아닌 일반적인 page라 하더라도
-    			 * 더이상 limit가 없을 때는 쓰고 return.
-    			 * 특히, nextmax가 not null이다. 왜냐하면 null이라면 last page로서 위에서 걸렸을 것이기 때문이다.
-    			 */
-            	if(nextList.getRemainingLimitStatus() == 0) {
-            		writeListToDB(result);
-            		
-        			callback.onAccountLimitExceeded(Long.valueOf(nextPage.getNextMaxTagId()));
-            		
-            		break;
-            	}
-            	
-                nextList = instagram.getRecentMediaNextPage(nextPage);
-                nextPage = nextList.getPagination();
-                nextData = nextList.getData();
-    			nextLower = extractId(nextData.get(nextData.size() - 1).getId()) < from;
-    			nextUpper = extractId(nextData.get(0).getId()) > to;
-            }
-		} catch (Exception e) {// json malformed exception 등 예상치 못한 exception들도 더 있는 것 같다.
-			Logger.printException(e);// 출력은 해준다.
-			
-			/*
-			 * 여기에서도 위의 check condition들 피해갈 자격은 없다.
-			 * 하지만 다 할 필요도 없다.
-			 * 필요에 맞게, 그리고 bound로 귀결해서 정리해준다.
-			 */
-			
-			long bound;
-			
-			try {
-				// 1. empty check.
-				if(result == null || result.isEmpty()) {
-					bound = to;
-					
-					callback.onAccountExceptionOccurred(bound);
-					
-					return;
-				}
-				
-				/*
-				 * 2. boundary check.
-				 * 여기서도 필요는 하다.
-				 * TODO: 다만, upper는 아직 확신하지 못한다.
-				 * 그리고 filter한 결과는 보존해준다.
-				 */
-				boolean lower = extractId(result.get(result.size() - 1).getId()) < from;
-				boolean upper = extractId(result.get(0).getId()) > to;
-				
-				if(lower || upper) {
-					bound = from;
-					
-					result = filterList(result, lower, upper, from, to);
-					
-					writeListToDB(result);
-					
-					callback.onAccountExceptionOccurred(bound);
-					
-					return;
-				}
-				
-				/*
-				 * 3. normal
-				 * page, limit check는 할 수 없다.
-				 * 그냥 write하고
-				 * bound 구해서 return.
-				 */
-				bound = extractId(result.get(result.size() - 1).getId()) - 1;
-				
-				writeListToDB(result);
-				
-				// 그래도 bound가 from 아래로 떨어질 수 있으므로 처리해준다.
-				callback.onAccountExceptionOccurred(bound < from ? from : bound);
-				
-				return;
-			} catch (Exception e2) {
-				/*
-				 * 그래도 또 난다면, 여기서는 그냥 database에서처럼 해결불능 message를 낸다.
-				 * account를 가만히 두면 stop된 후 observer에 의해 재시작될 것이다.
-				 * 하지만 db에 제대로 쓴 것도 아니므로 resize를 명확히 해주기가 힘들다.
-				 * 따라서 message 출력 후 차라리 task를 종료시키도록 resize해준다.
-				 */
-				Logger.printMessage(String.format("<Account %d> : error occurred.", id));
-				
-				bound = from;
-				
-				callback.onAccountExceptionOccurred(bound);
-			}
+			return lower || upper;
+		} else {
+			return true;
 		}
 	}
 	
 	public long extractId(String string) {
 		return Long.valueOf(string.split("_")[0]);
-	}
-	
-	public List<MediaFeedData> filterList(List<MediaFeedData> list, boolean lower, boolean upper, long from, long to) {
-		for(Iterator<MediaFeedData> iterator = list.iterator(); iterator.hasNext();) {
-			MediaFeedData item = iterator.next();
-			
-			if(extractId(item.getId()) < from) {
-				if(lower) {
-					iterator.remove();
-				}
-			} else if(extractId(item.getId()) > to) {
-				if(upper) {
-					iterator.remove();
-				}
-			}
-		}
-		
-		return list;
 	}
 	
 	// 아마 0일 때는 exception 날 수도 있을 것 같다.
@@ -382,11 +222,7 @@ public class Account {
 		return remaining;
 	}
 	
-	public void updateStatus() {
-		if(status == Status.WORKING) {// working일 때는 안하는게 좋고, 이 때의 refresh는, work 끝나고 task가 직접 해준다.
-			return;
-		}
-		
+	public void updateStatus() {//TODO: SYNC 해야 되는 것 아닌지.
 		int remaining = getRateRemaining();
 		
 		if(remaining != -1) {
@@ -415,10 +251,8 @@ public class Account {
 	}
 	
 	public interface AccountCallback {
-		void onAccountLimitExceeded(long bound);// limit exceeded
-		void onAccountExceptionOccurred(long bound);// exception occured
-		void onAccountRangeDone();// range done
-		void onAccountQueried(long size);
+		void onAccountRangeDone(List<MediaFeedData> list);
+		void onAccountExceptionOccured(List<MediaFeedData> list);
 	}
-
+	
 }

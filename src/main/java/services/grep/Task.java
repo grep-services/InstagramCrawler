@@ -1,8 +1,11 @@
 package main.java.services.grep;
 
+import java.util.List;
+
 import main.java.services.grep.Account.AccountCallback;
 
 import org.apache.commons.lang3.Range;
+import org.jinstagram.entity.users.feed.MediaFeedData;
 
 /**
  * 
@@ -61,51 +64,24 @@ public class Task extends Thread implements AccountCallback {
 		
 		while(status != Status.DONE) {
 			while(status == Status.WORKING) {// account, range 등이 exception 등에 의해 변경될 수 있다. 그 때 다시 working으로 돌리면서 진입한다.
-				account.getListFromTag(tag, range.getMinimum(), range.getMaximum());
-				
-				// pause할 필요 없다. 위 method가 스스로 return하기 전에 알아서 처리를 다 해둔다.
+				//TODO: filtering하다가 exception 난 것까지는 어떻게 할 수가 없다. 그것은 그냥 crawling 몇 번 한 평균으로서 그냥 보증한다.
+				List<MediaFeedData> list = account.getListFromTag_(tag, range.getMinimum(), range.getMaximum());
 			}
 		}
 	}
 	
 	@Override
-	public void onAccountLimitExceeded(long bound) {// limit exceeded - 새 account를 요청해야 한다.
-		Logger.printMessage("<Account %d> Limit exceeded", account.getAccountId());
-
-		account.setStatus(Account.Status.UNAVAILABLE);// acc 변화가 빨라야 observer와의 충돌이 안생긴다.
-		
-		callback.onTaskAccountDischarged(this, bound);// ACC : UNAVAILABLE, TASK : UNAVAILABLE
+	public void onAccountRangeDone(List<MediaFeedData> list) {
+		callback.onTaskJobCompleted(this, list);
 	}
 
 	@Override
-	public void onAccountExceptionOccurred(long bound) {// account occur - 다시 실행되어야 한다.
-		Logger.printMessage("<Account %d> Exception occurred", account.getAccountId());
-
-		callback.onTaskUnexpectedlyStopped(this, bound);// ACC : WORKING, TASK : UNAVAILABLE
-	}
-
-	@Override
-	public void onAccountRangeDone() {// range done - 끝난 것.
-		Logger.printMessage("<Account %d> Range done", account.getAccountId());
-		
-		account.setStatus(Account.Status.UNAVAILABLE);// 이제 working일 때는 pass하게 했으므로, 그냥 unavailable로 한다. 문제없다.
-		
-		callback.onTaskJobCompleted(this);// ACC : 모르고, TASK : DONE. BREAK;
+	public void onAccountExceptionOccured(List<MediaFeedData> list) {
+		callback.onTaskUnexpectedlyStopped(this, list);
 	}
 	
-	@Override
-	public void onAccountQueried(long size) {
-		Logger.printMessage("<Account %d> Queried periodically - %d", account.getAccountId(), size);
-		
-		callback.onTaskTravelled(this, size);
-	}
-
-	public void resizeTask(long bound) {
-		long size = range.getMaximum() - bound;// maximum이 바뀔 것이므로 미리 보관해야 된다.
-		
-		setRange(Range.between(range.getMinimum(), bound));
-		
-		callback.onTaskResized(this, size);
+	public void resizeTask(long from, long to) {
+		setRange(Range.between(from, to));
 	}
 	
 	public void startTask() {
@@ -122,6 +98,12 @@ public class Task extends Thread implements AccountCallback {
 	
 	public void stopTask() {
 		status = Status.DONE;
+	}
+	
+	public void pauseTask() {
+		status = Status.UNAVAILABLE;
+		
+		account.interrupt();
 	}
 	
 	public void resumeTask() {
@@ -157,12 +139,8 @@ public class Task extends Thread implements AccountCallback {
 	}
 
 	public interface TaskCallback {
-		void onTaskAccountDischarged(Task task, long bound);
-		void onTaskUnexpectedlyStopped(Task task, long bound);
-		void onTaskJobCompleted(Task task);
-		void onTaskIncompletelyFinished(Task task, long bound);
-		void onTaskResized(Task task, long visited);
-		void onTaskTravelled(Task task, long visited);
+		void onTaskJobCompleted(Task task, List<MediaFeedData> list);
+		void onTaskUnexpectedlyStopped(Task task, List<MediaFeedData> list);
 	}
 	
 }

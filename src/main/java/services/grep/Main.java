@@ -7,10 +7,11 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.apache.commons.lang3.Range;
-
 import main.java.services.grep.Database.DatabaseCallback;
 import main.java.services.grep.Task.TaskCallback;
+
+import org.apache.commons.lang3.Range;
+import org.jinstagram.entity.users.feed.MediaFeedData;
 
 /**
  * 
@@ -27,7 +28,7 @@ import main.java.services.grep.Task.TaskCallback;
 
 public class Main implements TaskCallback, DatabaseCallback {
 
-	final String tag = "ㅂㅈ";
+	final String tag = "먹스타그램";
 	
 	List<Account> accounts;
 	List<Task> tasks;
@@ -89,12 +90,8 @@ public class Main implements TaskCallback, DatabaseCallback {
 		return id;
 	}
 	
-	public void printTaskProgress() {
-		printTaskProgress(null, 0);
-	}
-
-	public synchronized void printTaskProgress(Task task, long visited) {// this에 대해서 sync가 필요한 것이다.
-		this.visited += visited;
+	public synchronized void processTaskProgress(Task task, long from, long to) {
+		this.visited += (to - from);
 		
 		Logger.printMessage("<Task %d> Progress : %d / %d. %.2f%% done in %s and %s remains.", task != null ? task.getTaskId() : -1, this.visited, diff, getTaskProgress(), getTaskElapsedTime(), getTaskRemainingTime());
 	}
@@ -135,95 +132,100 @@ public class Main implements TaskCallback, DatabaseCallback {
 		return completed;
 	}
 	
-	public boolean allocAccount(Task task) {// main 및 observer에서 access될 수 있으므로 sync.
-		Account newAccount = null;
-		
-		for(Account account : accounts) {// 어차피 기존 account는 exception 날수도.
-			account.updateStatus();
-			
-			if(account.getStatus() == Account.Status.FREE) {
-				newAccount = account;
+	public boolean allocAccount(Task task) {
+		for(Account account : accounts) {
+			synchronized (account) {// 한 acc가 여러 task에 가지 않도록 lock.
+				if(account.getStatus() == Account.Status.WORKING) {
+					continue;
+				}
 				
-				break;
+				account.updateStatus();
+				
+				if(account.getStatus() == Account.Status.FREE) {
+					task.setAccount(account);
+					
+					return true;
+				}
 			}
 		}
 		
-		if(newAccount != null) {
-			task.setAccount(newAccount);
-			
-			Logger.printMessage("<Task %d - Account %d> Allocated", task.getTaskId(), newAccount.getAccountId());
-			
-			return true;
-		} else {
-			return false;
+		return false;
+	}
+	
+	public boolean allocSchedule(Task task) {
+		for(Task task_ : tasks) {
+			synchronized (task_) {
+				if(task_.getStatus() != Task.Status.DONE) {// done만 아니면 된다.
+					task_.pauseTask();
+				}
+			}
 		}
+		
+		return false;
 	}
 	
 	@Override
-	public void onTaskAccountDischarged(Task task, long bound) {
-		synchronized (task) {
-			Logger.printMessage("<Task %d> Need account", task.getTaskId());
-			
-			task.resizeTask(bound);// 지금 실패하고 observer에 의해 나중에 실행될 수도 있지만, 그럴 때 resize할 수가 없으므로, 여기서 미리 한다.
-			
-			if(allocAccount(task)) {// acc 할당 성공했을 때만 resume하고, 그렇지 않을 때는 그냥 observer로 돌면서 기다린다.
-				task.resumeTask();;
-			};
+	public void onTaskJobCompleted(Task task, List<MediaFeedData> list) {// 남의걸 갖고와서 자기가 나눠가진다.
+		writeListToDB(list);
+		
+		processTaskProgress(task, task.getRange().getMinimum(), task.getRange().getMaximum());
+		
+		if(!allocSchedule(task)) {// 아무것도 할당 못했다 - 다 끝났다.
+			task.stopTask();
+		} else {
+			if(!allocAccount(task)) {// account가 없다. - 그냥 기다린다.
+				task.pauseTask();
+			} else {
+				task.resumeTask();
+			}
 		}
 	}
 
 	@Override
-	public void onTaskUnexpectedlyStopped(Task task, long bound) {
-		synchronized (task) {
-			Logger.printMessage("<Task %d> Stopped and restart", task.getTaskId());
-			
-			if(bound < task.getRange().getMaximum()) {// 그대로일 경우는 굳이 resize할 필요 없다.
-				task.resizeTask(bound);
-			}
-			
+	public void onTaskUnexpectedlyStopped(Task task, List<MediaFeedData> list) {// 자기것을 다시 실행한다.
+		writeListToDB(list);
+		
+		long last;
+		
+		if(list != null && !list.isEmpty()) {
+			last = extractId(list.get(list.size() - 1).getId());
+		} else {
+			last = task.getRange().getMaximum();// 아무것도 없으면 재실행이 맞을 것이다.
+		}
+		
+		processTaskProgress(task, last, task.getRange().getMaximum());
+		
+		task.resizeTask(task.getRange().getMinimum(), last - 1);//TODO: LAST NOT ZERO 증명
+		
+		if(!allocAccount(task)) {// account가 없다. - 그냥 기다린다.
+			task.pauseTask();//TODO: 여기서도 INTERRUPT 되면 안될 것 같은데...
+		} else {
 			task.resumeTask();
 		}
 	}
-
-	@Override
-	public void onTaskJobCompleted(Task task) {
-		synchronized (task) {
-			Logger.printMessage("<Task %d> Job completed ", task.getTaskId());
-			
-			task.stopTask();
-			
-			task.resizeTask(task.getRange().getMinimum());// 0로 해두고 하면, logging이 깔끔하다.
-		}
+	
+	public long extractId(String string) {
+		return Long.valueOf(string.split("_")[0]);
 	}
 	
-	@Override
-	public void onTaskIncompletelyFinished(Task task, long bound) {// 아무래도, 1개의 범위가 아닐 것이다.
-		synchronized (task) {
-			Logger.printMessage("<Task %d> Incompletely finished : %d - %d", task.getTaskId(), task.getRange().getMinimum(), bound);
-			
-			task.stopTask();
-			
-			task.resizeTask(bound);// stop 했어도 그래도 resizing 해두기는 한다.
+	public void writeListToDB(List<MediaFeedData> list) {
+		if(list == null || list.isEmpty()) {
+			return;
 		}
-	}
-	
-	@Override
-	public void onTaskResized(Task task, long visited) {
-		synchronized (task) {
-			// 이미 resize되어서 오므로 min, max 쓰면 된다.
-			Logger.printMessage("<Task %d> Resized : %d, %d - %d", task.getTaskId(), visited, task.getRange().getMinimum(), task.getRange().getMaximum());
-			
-			printTaskProgress(task, visited);
-		}
-	}
-	
-	@Override
-	public void onTaskTravelled(Task task, long visited) {
-		synchronized (task) {
-			// 특히 max에서 min까지 감소하면서 travelling하므로 그렇게 표기한다.
-			Logger.printMessage("<Task %d> Travelled : %d, %d - %d", task.getTaskId(), visited, task.getRange().getMaximum(), task.getRange().getMinimum());
-			
-			printTaskProgress(task, visited);
+		
+		// 일단 1개로 진행해본다.
+		Database database = new Database(list, this);
+		
+		database.start();
+		
+		/*
+		 * 주기적 write가 아닌만큼 wait해도 무방하다 생각
+		 * 문제 있다면 없앤다.
+		 */
+		try {
+			database.join();
+		} catch (InterruptedException e) {
+			Logger.printException(e);
 		}
 	}
 
@@ -365,8 +367,6 @@ public class Main implements TaskCallback, DatabaseCallback {
 				if(isAllTasksCompleted()) {
 					break;
 				}
-				
-				printTaskProgress();// task resizing은 주기가 일정하지 않으므로, 이런 것도 필요하다고 생각한다.
 			}
 		}
 		
