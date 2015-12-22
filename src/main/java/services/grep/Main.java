@@ -91,7 +91,7 @@ public class Main implements TaskCallback, DatabaseCallback {
 	}
 	
 	public synchronized void processTaskProgress(Task task, long from, long to) {
-		this.visited += (to - from);
+		this.visited += (to - from + 1);
 		
 		Logger.printMessage("<Task %d> Progress : %d / %d. %.2f%% done in %s and %s remains.", task != null ? task.getTaskId() : -1, this.visited, diff, getTaskProgress(), getTaskElapsedTime(), getTaskRemainingTime());
 	}
@@ -156,7 +156,9 @@ public class Main implements TaskCallback, DatabaseCallback {
 		for(Task task_ : tasks) {
 			synchronized (task_) {
 				if(task_.getStatus() != Task.Status.DONE) {// done만 아니면 된다.
-					task_.pauseTask();
+					task_.splitTask(task);
+					
+					return true;
 				}
 			}
 		}
@@ -165,7 +167,7 @@ public class Main implements TaskCallback, DatabaseCallback {
 	}
 	
 	@Override
-	public void onTaskJobCompleted(Task task, List<MediaFeedData> list) {// 남의걸 갖고와서 자기가 나눠가진다.
+	public void onTaskDone(Task task, List<MediaFeedData> list) {// 남의걸 갖고와서 자기가 나눠가진다.
 		writeListToDB(list);
 		
 		processTaskProgress(task, task.getRange().getMinimum(), task.getRange().getMaximum());
@@ -182,7 +184,7 @@ public class Main implements TaskCallback, DatabaseCallback {
 	}
 
 	@Override
-	public void onTaskUnexpectedlyStopped(Task task, List<MediaFeedData> list) {// 자기것을 다시 실행한다.
+	public void onTaskStop(Task task, List<MediaFeedData> list) {// 자기것을 다시 실행한다.
 		writeListToDB(list);
 		
 		long last;
@@ -190,7 +192,7 @@ public class Main implements TaskCallback, DatabaseCallback {
 		if(list != null && !list.isEmpty()) {
 			last = extractId(list.get(list.size() - 1).getId());
 		} else {
-			last = task.getRange().getMaximum();// 아무것도 없으면 재실행이 맞을 것이다.
+			last = task.getRange().getMaximum() + 1;// 아무것도 없으면 재실행이 맞을 것이고, 이렇게 해야 다 딱 맞아떨어진다.
 		}
 		
 		processTaskProgress(task, last, task.getRange().getMaximum());
@@ -204,6 +206,62 @@ public class Main implements TaskCallback, DatabaseCallback {
 		}
 	}
 	
+	/*
+	 * 어느정도 구현은 되었는데
+	 * 아직 done 조건이 정확하지 않고,
+	 * negative integer 가능성 명확히 확인해야 하며
+	 * 전체 process 검증 및
+	 * 다시한번 code 최적화 한다.
+	 */
+	
+	@Override
+	public void onTaskSplit(Task task, List<MediaFeedData> list, Task task_) {// 절반만 다시 실행한다.
+		writeListToDB(list);
+		
+		long last;
+		
+		if(list != null && !list.isEmpty()) {
+			last = extractId(list.get(list.size() - 1).getId());
+		} else {
+			last = task.getRange().getMaximum() + 1;// 아무것도 없으면 재실행이 맞을 것이고, 이렇게 해야 다 딱 맞아떨어진다.
+		}
+		
+		processTaskProgress(task, last, task.getRange().getMaximum());
+		
+		long min = task.getRange().getMinimum();
+		long pivot = (min + (last - 1)) / 2;
+		
+		task_.resizeTask(min, pivot - 1);
+		
+		if(!allocAccount(task_)) {// account가 없다. - 그냥 기다린다.
+			task_.pauseTask();
+		} else {
+			task_.resumeTask();
+		}
+		
+		task.resizeTask(pivot, last - 1);//TODO: LAST NOT ZERO 증명
+		
+		if(!allocAccount(task)) {// account가 없다. - 그냥 기다린다.
+			task.pauseTask();
+		} else {
+			task.resumeTask();
+		}
+	}
+	
+	public void resizeTask(Task task, long from, long to) {
+		if(from >= 0 && from < to) {
+			task.resizeTask(from, to);
+			
+			if(!allocAccount(task)) {// account가 없다. - 그냥 기다린다.
+				task.pauseTask();
+			} else {
+				task.resumeTask();
+			}
+		} else {
+			task.pauseTask();
+		}
+	}
+
 	public long extractId(String string) {
 		return Long.valueOf(string.split("_")[0]);
 	}

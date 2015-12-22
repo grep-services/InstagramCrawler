@@ -45,6 +45,7 @@ public class Account {
 	//private static final int database_batch = 10000;
 	
 	boolean interrupted = false;
+	Task task;// for split
 	
 	AccountCallback callback;
 
@@ -69,7 +70,9 @@ public class Account {
 		this.callback = callback;
 	}
 	
-	public void interrupt() {
+	public void interrupt(Task task) {
+		this.task = task;
+		
 		interrupted = true;
 	}
 	
@@ -139,7 +142,7 @@ public class Account {
 		            		if(interrupted) {
 		            			interrupted = false;
 		            			
-		            			throw new Exception();
+		            			throw new Exception("Interrupted");
 		            		}
 		            		
 			    			if(nextPage.hasNextPage()) {
@@ -156,10 +159,14 @@ public class Account {
 				}
 			}
 			
-			callback.onAccountRangeDone(result);
+			callback.onAccountDone(result);
 		} catch (Exception e) {
 			//TODO: 복잡성 때문에 제거했지만, 필요하다면 limit, io, etc 등 exception 이유 구분해서 처리 가능.
-			callback.onAccountExceptionOccured(result);
+			if(e.getMessage() != null && e.getMessage().equals("Interrupted")) {
+				callback.onAccountSplit(result, task);// 어차피 이렇게 be called되므로 항상 reset된다고 보면 된다.
+			} else {
+				callback.onAccountStop(result);
+			}
 		}
 		
 		return result;
@@ -251,8 +258,9 @@ public class Account {
 	}
 	
 	public interface AccountCallback {
-		void onAccountRangeDone(List<MediaFeedData> list);
-		void onAccountExceptionOccured(List<MediaFeedData> list);
+		void onAccountDone(List<MediaFeedData> list);
+		void onAccountStop(List<MediaFeedData> list);
+		void onAccountSplit(List<MediaFeedData> list, Task task);
 	}
 	
 }

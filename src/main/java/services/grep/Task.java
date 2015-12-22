@@ -71,13 +71,22 @@ public class Task extends Thread implements AccountCallback {
 	}
 	
 	@Override
-	public void onAccountRangeDone(List<MediaFeedData> list) {
-		callback.onTaskJobCompleted(this, list);
+	public void onAccountDone(List<MediaFeedData> list) {
+		callback.onTaskDone(this, list);
 	}
 
 	@Override
-	public void onAccountExceptionOccured(List<MediaFeedData> list) {
-		callback.onTaskUnexpectedlyStopped(this, list);
+	public void onAccountStop(List<MediaFeedData> list) {
+		callback.onTaskStop(this, list);
+	}
+	
+	@Override
+	public void onAccountSplit(List<MediaFeedData> list, Task task) {
+		callback.onTaskSplit(this, list, task);
+	}
+
+	public void splitTask(Task task) {
+		account.interrupt(task);// 멈추게 되고, 결국 exception 내면서 callback할 것이다.
 	}
 	
 	public void resizeTask(long from, long to) {
@@ -102,8 +111,6 @@ public class Task extends Thread implements AccountCallback {
 	
 	public void pauseTask() {
 		status = Status.UNAVAILABLE;
-		
-		account.interrupt();
 	}
 	
 	public void resumeTask() {
@@ -139,8 +146,9 @@ public class Task extends Thread implements AccountCallback {
 	}
 
 	public interface TaskCallback {
-		void onTaskJobCompleted(Task task, List<MediaFeedData> list);
-		void onTaskUnexpectedlyStopped(Task task, List<MediaFeedData> list);
+		void onTaskDone(Task task, List<MediaFeedData> list);
+		void onTaskStop(Task task, List<MediaFeedData> list);
+		void onTaskSplit(Task task, List<MediaFeedData> list, Task task_);
 	}
 	
 }
