@@ -122,7 +122,7 @@ public class Account {
 	 * 즉, 여기서는 무조건 값만 받고, 자연스럽게 또는 exception에 의해 return한다.
 	 * 2차 exception은 애초에 여기서 바로 다시 시도하는 것이 아니기 때문에 고려할 필요 없다.
 	 */
-	public List<MediaFeedData> getListFromTag_(String tag, long from, long to) {
+	public List<MediaFeedData> getListFromTag(String tag, long from, long to) {
 		List<MediaFeedData> result = null;
 		
 		try {

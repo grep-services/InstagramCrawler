@@ -65,7 +65,7 @@ public class Task extends Thread implements AccountCallback {
 		while(status != Status.DONE) {
 			while(status == Status.WORKING) {// account, range 등이 exception 등에 의해 변경될 수 있다. 그 때 다시 working으로 돌리면서 진입한다.
 				//TODO: filtering하다가 exception 난 것까지는 어떻게 할 수가 없다. 그것은 그냥 crawling 몇 번 한 평균으로서 그냥 보증한다.
-				List<MediaFeedData> list = account.getListFromTag_(tag, range.getMinimum(), range.getMaximum());
+				List<MediaFeedData> list = account.getListFromTag(tag, range.getMinimum(), range.getMaximum());
 			}
 		}
 	}
@@ -89,8 +89,27 @@ public class Task extends Thread implements AccountCallback {
 		account.interrupt(task);// 멈추게 되고, 결국 exception 내면서 callback할 것이다.
 	}
 	
-	public void resizeTask(long from, long to) {
-		setRange(Range.between(from, to));
+	/*
+	 * from == to 이기만 해도 1개는 남아있는 것이다.
+	 * 실질적인 의미를 두기 위해서는 from > to 일 경우는 set null 해야 한다.
+	 * 그리고 그 task가 더이상 필요없다는 뜻에서 false를 return한다.
+	 */
+	public boolean resizeTask(long from, long to) {
+		if(from <= to) {
+			setRange(Range.between(from, to));
+		} else {
+			setRange(null);
+		}
+		
+		return from <= to;
+	}
+	
+	// 위 method를 직접 쓰다보면 헷갈릴까봐 만들어둔 method
+	public boolean resizeTask(Range<Long> range)
+	{
+		setRange(null);
+		
+		return false;
 	}
 	
 	public void startTask() {

@@ -48,7 +48,7 @@ public class Main implements TaskCallback, DatabaseCallback {
 	public void initSchedule() {
 		lower = 0;
 		upper = getLastItemId();
-		diff = upper - lower;
+		diff = upper - lower + 1;
 		visited = 0;
 		size = getItemSize();
 		done = 0;
@@ -90,8 +90,12 @@ public class Main implements TaskCallback, DatabaseCallback {
 		return id;
 	}
 	
-	public synchronized void processTaskProgress(Task task, long from, long to) {
-		this.visited += (to - from + 1);
+	public void processTaskProgress(Task task, long from, long to) {
+		processTaskProgress(task, to - from + 1);
+	}
+	
+	public synchronized void processTaskProgress(Task task, long visited) {
+		this.visited += visited;
 		
 		Logger.printMessage("<Task %d> Progress : %d / %d. %.2f%% done in %s and %s remains.", task != null ? task.getTaskId() : -1, this.visited, diff, getTaskProgress(), getTaskElapsedTime(), getTaskRemainingTime());
 	}
@@ -172,6 +176,8 @@ public class Main implements TaskCallback, DatabaseCallback {
 		
 		processTaskProgress(task, task.getRange().getMinimum(), task.getRange().getMaximum());
 		
+		task.resizeTask(null);
+		
 		if(!allocSchedule(task)) {// 아무것도 할당 못했다 - 다 끝났다.
 			task.stopTask();
 		} else {
@@ -187,22 +193,38 @@ public class Main implements TaskCallback, DatabaseCallback {
 	public void onTaskStop(Task task, List<MediaFeedData> list) {// 자기것을 다시 실행한다.
 		writeListToDB(list);
 		
-		long last;
-		
 		if(list != null && !list.isEmpty()) {
-			last = extractId(list.get(list.size() - 1).getId());
+			long last = extractId(list.get(list.size() - 1).getId());
+			
+			processTaskProgress(task, last, task.getRange().getMaximum());
+			
+			if(task.resizeTask(task.getRange().getMinimum(), last - 1)) {
+				if(!allocAccount(task)) {// account가 없다. - 그냥 기다린다.
+					task.pauseTask();
+				} else {
+					task.resumeTask();
+				}
+			} else {// stop도 done과 같은 stop이 있을 수 있다.
+				task.resizeTask(task.getRange().getMinimum(), task.getRange().getMaximum());
+				
+				if(!allocSchedule(task)) {// 아무것도 할당 못했다 - 다 끝났다.
+					task.stopTask();
+				} else {
+					if(!allocAccount(task)) {// account가 없다. - 그냥 기다린다.
+						task.pauseTask();
+					} else {
+						task.resumeTask();
+					}
+				}
+			}
 		} else {
-			last = task.getRange().getMaximum() + 1;// 아무것도 없으면 재실행이 맞을 것이고, 이렇게 해야 다 딱 맞아떨어진다.
-		}
-		
-		processTaskProgress(task, last, task.getRange().getMaximum());
-		
-		task.resizeTask(task.getRange().getMinimum(), last - 1);//TODO: LAST NOT ZERO 증명
-		
-		if(!allocAccount(task)) {// account가 없다. - 그냥 기다린다.
-			task.pauseTask();//TODO: 여기서도 INTERRUPT 되면 안될 것 같은데...
-		} else {
-			task.resumeTask();
+			processTaskProgress(task, 0);
+			
+			if(!allocAccount(task)) {// account가 없다. - 그냥 기다린다.
+				task.pauseTask();
+			} else {
+				task.resumeTask();
+			}
 		}
 	}
 	
@@ -222,6 +244,32 @@ public class Main implements TaskCallback, DatabaseCallback {
 		
 		if(list != null && !list.isEmpty()) {
 			last = extractId(list.get(list.size() - 1).getId());
+			
+			processTaskProgress(task, last, task.getRange().getMaximum());
+			
+			long min = task.getRange().getMinimum();
+			long pivot = (min + (last - 1)) / 2;
+			
+			// 거의 마지막이 되면 둘 중 한개는 먼저 stop(done)이 될 것이다.
+			if(task_.resizeTask(min, pivot)) {
+				if(!allocAccount(task_)) {// account가 없다. - 그냥 기다린다.
+					task_.pauseTask();
+				} else {
+					task_.resumeTask();
+				}
+			} else {
+				task_.stopTask();
+			}
+			
+			if(task.resizeTask(pivot + 1, last - 1)) {
+				if(!allocAccount(task)) {// account가 없다. - 그냥 기다린다.
+					task.pauseTask();
+				} else {
+					task.resumeTask();
+				}
+			} else {
+				task.stopTask();
+			}
 		} else {
 			last = task.getRange().getMaximum() + 1;// 아무것도 없으면 재실행이 맞을 것이고, 이렇게 해야 다 딱 맞아떨어진다.
 		}
@@ -231,7 +279,7 @@ public class Main implements TaskCallback, DatabaseCallback {
 		long min = task.getRange().getMinimum();
 		long pivot = (min + (last - 1)) / 2;
 		
-		task_.resizeTask(min, pivot - 1);
+		task_.resizeTask(min, pivot);
 		
 		if(!allocAccount(task_)) {// account가 없다. - 그냥 기다린다.
 			task_.pauseTask();
@@ -239,7 +287,7 @@ public class Main implements TaskCallback, DatabaseCallback {
 			task_.resumeTask();
 		}
 		
-		task.resizeTask(pivot, last - 1);//TODO: LAST NOT ZERO 증명
+		task.resizeTask(pivot + 1, last - 1);//TODO: LAST NOT ZERO 증명
 		
 		if(!allocAccount(task)) {// account가 없다. - 그냥 기다린다.
 			task.pauseTask();
