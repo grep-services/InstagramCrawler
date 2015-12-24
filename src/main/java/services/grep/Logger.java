@@ -1,4 +1,9 @@
 package main.java.services.grep;
+
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.io.IOException;
+
 /**
  * 
  * 이 시스템에 맞게 특화된 logger.
@@ -11,19 +16,78 @@ package main.java.services.grep;
 
 public class Logger {
 
-	public Logger() {
+	private static final Logger instance = new Logger();
+	
+	private BufferedWriter writer;
+	
+	// 이런 것들은 다음에 factory형식으로 변환.
+	private static boolean CONSOLE = true;
+	private static boolean FILE = true;
+	
+	public static Logger getInstance() {
+		return instance;
 	}
 	
-	public static void printException(Exception e) {
-		System.out.println("Exception : " + e.getMessage());
+	private Logger() {
+		init();
 	}
 	
-	public static void printMessage(String msg) {
-		System.out.println("Message : " + msg);
+	private void init() {
+		try {
+			writer = new BufferedWriter(new FileWriter("output"));
+		} catch (IOException e) {
+			System.out.println("Exception : " + e.getMessage());
+		}
 	}
 	
-	public static void printMessage(String format, Object... args) {
-		System.out.println("Message : " + String.format(format, args));
+	public void release() {
+		try {
+			writer.close();
+			
+			FILE = false;
+		} catch (IOException e) {
+			System.out.println("Exception : " + e.getMessage());
+		}
+	}
+	
+	public void printException(Exception e) {
+		String string = "Exception : " + e.getMessage();
+		
+		if(CONSOLE) {
+			System.out.println(string);
+		}
+		
+		if(FILE) {
+			if(writer != null) {
+				try {
+					writer.write(string + '\n');
+				} catch (IOException e1) {
+					System.out.println("Exception : " + e1.getMessage());// prevent recursive
+				}
+			}
+		}
+	}
+	
+	public void printMessage(String msg) {
+		String string = "Message : " + msg;
+		
+		if(CONSOLE) {
+			System.out.println(string);
+		}
+		
+		if(FILE) {
+			if(writer != null) {
+				try {
+					writer.write(string + '\n');
+				} catch (IOException e1) {
+					System.out.println("Message : " + e1.getMessage());// prevent recursive
+				}
+			}
+		}
+	}
+	
+	public void printMessage(String format, Object... args) {
+		printMessage(String.format(format, args));
 	}
 
 }

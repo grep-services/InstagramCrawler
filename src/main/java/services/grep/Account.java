@@ -2,8 +2,6 @@ package main.java.services.grep;
 import java.util.Iterator;
 import java.util.List;
 
-import main.java.services.grep.Database.DatabaseCallback;
-
 import org.jinstagram.Instagram;
 import org.jinstagram.auth.model.Token;
 import org.jinstagram.entity.common.Pagination;
@@ -70,6 +68,10 @@ public class Account {
 		this.callback = callback;
 	}
 	
+	public AccountCallback getCallback() {
+		return callback;
+	}
+	
 	public void interrupt(Task task) {
 		this.task = task;
 		
@@ -90,7 +92,7 @@ public class Account {
 				}
 			}
 		} catch (InstagramException e) {
-			Logger.printException(e);
+			Logger.getInstance().printException(e);
 		}
 		
 		return count;
@@ -108,7 +110,7 @@ public class Account {
 				id = extractId(data.get(0).getId());
 			}
 		} catch (InstagramException e) {
-			Logger.printException(e);
+			Logger.getInstance().printException(e);
 		}
 		
 		return id;
@@ -223,7 +225,7 @@ public class Account {
 				remaining =  mediaFeed.getRemainingLimitStatus();// 여기서도 exception 날 수 있으니 값을 바로 return하지 않는다.
 			}
 		} catch(InstagramException e) {
-			Logger.printException(e);
+			Logger.getInstance().printException(e);
 		}
 		
 		return remaining;

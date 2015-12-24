@@ -60,7 +60,7 @@ public class Task extends Thread implements AccountCallback {
 
 	@Override
 	public void run() {
-		Logger.printMessage("<Task %d> Running", id);
+		Logger.getInstance().printMessage("<Task %d> Running", id);
 		
 		while(status != Status.DONE) {
 			while(status == Status.WORKING) {// account, range 등이 exception 등에 의해 변경될 수 있다. 그 때 다시 working으로 돌리면서 진입한다.
@@ -89,38 +89,15 @@ public class Task extends Thread implements AccountCallback {
 		account.interrupt(task);// 멈추게 되고, 결국 exception 내면서 callback할 것이다.
 	}
 	
-	/*
-	 * from == to 이기만 해도 1개는 남아있는 것이다.
-	 * 실질적인 의미를 두기 위해서는 from > to 일 경우는 set null 해야 한다.
-	 * 그리고 그 task가 더이상 필요없다는 뜻에서 false를 return한다.
-	 */
-	public boolean resizeTask(long from, long to) {
-		if(from <= to) {
-			setRange(Range.between(from, to));
-		} else {
-			setRange(null);
-		}
-		
-		return from <= to;
-	}
-	
-	// 위 method를 직접 쓰다보면 헷갈릴까봐 만들어둔 method
-	public boolean resizeTask(Range<Long> range)
-	{
-		setRange(null);
-		
-		return false;
-	}
-	
 	public void startTask() {
-		Logger.printMessage("<Task %d> Started", id);
+		Logger.getInstance().printMessage("<Task %d> Started", id);
 		
 		try {
 			status = Status.WORKING;
 			
 			start();
 		} catch(IllegalThreadStateException e) {
-			Logger.printException(e);
+			Logger.getInstance().printException(e);
 		}
 	}
 	
@@ -146,6 +123,16 @@ public class Task extends Thread implements AccountCallback {
 	
 	public void setRange(Range<Long> range) {
 		this.range = range;
+	}
+	
+	public boolean setRange(long from, long to) {// to가 from 미만으로 갈 수도 있는 점을 boolean으로 정리한다.
+		if(from <= to) {
+			setRange(Range.between(from, to));
+		} else {
+			setRange(null);
+		}
+		
+		return from <= to;
 	}
 	
 	public Range<Long> getRange() {

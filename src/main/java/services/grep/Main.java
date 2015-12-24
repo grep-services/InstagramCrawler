@@ -97,7 +97,7 @@ public class Main implements TaskCallback, DatabaseCallback {
 	public synchronized void processTaskProgress(Task task, long visited) {
 		this.visited += visited;
 		
-		Logger.printMessage("<Task %d> Progress : %d / %d. %.2f%% done in %s and %s remains.", task != null ? task.getTaskId() : -1, this.visited, diff, getTaskProgress(), getTaskElapsedTime(), getTaskRemainingTime());
+		Logger.getInstance().printMessage("<Task %d> Travelled : %d / %d. %.2f%% done in %s and %s remains.", task != null ? task.getTaskId() : -1, this.visited, diff, getTaskProgress(), getTaskElapsedTime(), getTaskRemainingTime());
 	}
 	
 	public float getTaskProgress() {
@@ -126,10 +126,12 @@ public class Main implements TaskCallback, DatabaseCallback {
 		boolean completed = true;
 		
 		for(Task task : tasks) {
-			if(task.getStatus() != Task.Status.DONE) {
-				completed = false;
-				
-				break;
+			synchronized (task) {// 이왕이면 하는게 낫다.
+				if(task.getStatus() != Task.Status.DONE) {
+					completed = false;
+					
+					break;
+				}
 			}
 		}
 		
@@ -139,7 +141,8 @@ public class Main implements TaskCallback, DatabaseCallback {
 	public boolean allocAccount(Task task) {
 		for(Account account : accounts) {
 			synchronized (account) {// 한 acc가 여러 task에 가지 않도록 lock.
-				if(account.getStatus() == Account.Status.WORKING) {
+				if(account.getStatus() == Account.Status.WORKING) {//TODO: 여기도 처리...
+					if(account.getCallback().equals(task))
 					continue;
 				}
 				
@@ -176,17 +179,17 @@ public class Main implements TaskCallback, DatabaseCallback {
 		
 		processTaskProgress(task, task.getRange().getMinimum(), task.getRange().getMaximum());
 		
-		task.resizeTask(null);
+		task.setRange(null);
 		
 		if(!allocSchedule(task)) {// 아무것도 할당 못했다 - 다 끝났다.
 			task.stopTask();
-		} else {
+		}/* else {
 			if(!allocAccount(task)) {// account가 없다. - 그냥 기다린다.
 				task.pauseTask();
 			} else {
 				task.resumeTask();
 			}
-		}
+		}*/ //TODO: 왜 굳이 ALLOC을 또함? 그냥 돌리기. 다른곳들도.
 	}
 
 	@Override
@@ -198,14 +201,14 @@ public class Main implements TaskCallback, DatabaseCallback {
 			
 			processTaskProgress(task, last, task.getRange().getMaximum());
 			
-			if(task.resizeTask(task.getRange().getMinimum(), last - 1)) {
+			if(task.setRange(task.getRange().getMinimum(), last - 1)) {
 				if(!allocAccount(task)) {// account가 없다. - 그냥 기다린다.
 					task.pauseTask();
 				} else {
 					task.resumeTask();
 				}
 			} else {// stop도 done과 같은 stop이 있을 수 있다.
-				task.resizeTask(task.getRange().getMinimum(), task.getRange().getMaximum());
+				task.setRange(task.getRange().getMinimum(), task.getRange().getMaximum());
 				
 				if(!allocSchedule(task)) {// 아무것도 할당 못했다 - 다 끝났다.
 					task.stopTask();
@@ -232,6 +235,7 @@ public class Main implements TaskCallback, DatabaseCallback {
 	 * 어느정도 구현은 되었는데
 	 * 아직 done 조건이 정확하지 않고,
 	 * negative integer 가능성 명확히 확인해야 하며
+	 * sync도 확인해야 되고
 	 * 전체 process 검증 및
 	 * 다시한번 code 최적화 한다.
 	 */
@@ -244,69 +248,33 @@ public class Main implements TaskCallback, DatabaseCallback {
 		
 		if(list != null && !list.isEmpty()) {
 			last = extractId(list.get(list.size() - 1).getId());
-			
-			processTaskProgress(task, last, task.getRange().getMaximum());
-			
-			long min = task.getRange().getMinimum();
-			long pivot = (min + (last - 1)) / 2;
-			
-			// 거의 마지막이 되면 둘 중 한개는 먼저 stop(done)이 될 것이다.
-			if(task_.resizeTask(min, pivot)) {
-				if(!allocAccount(task_)) {// account가 없다. - 그냥 기다린다.
-					task_.pauseTask();
-				} else {
-					task_.resumeTask();
-				}
-			} else {
-				task_.stopTask();
-			}
-			
-			if(task.resizeTask(pivot + 1, last - 1)) {
-				if(!allocAccount(task)) {// account가 없다. - 그냥 기다린다.
-					task.pauseTask();
-				} else {
-					task.resumeTask();
-				}
-			} else {
-				task.stopTask();
-			}
 		} else {
-			last = task.getRange().getMaximum() + 1;// 아무것도 없으면 재실행이 맞을 것이고, 이렇게 해야 다 딱 맞아떨어진다.
+			last = task.getRange().getMaximum() + 1;
 		}
-		
 		processTaskProgress(task, last, task.getRange().getMaximum());
 		
 		long min = task.getRange().getMinimum();
 		long pivot = (min + (last - 1)) / 2;
 		
-		task_.resizeTask(min, pivot);
-		
-		if(!allocAccount(task_)) {// account가 없다. - 그냥 기다린다.
-			task_.pauseTask();
-		} else {
-			task_.resumeTask();
-		}
-		
-		task.resizeTask(pivot + 1, last - 1);//TODO: LAST NOT ZERO 증명
-		
-		if(!allocAccount(task)) {// account가 없다. - 그냥 기다린다.
-			task.pauseTask();
-		} else {
-			task.resumeTask();
-		}
-	}
-	
-	public void resizeTask(Task task, long from, long to) {
-		if(from >= 0 && from < to) {
-			task.resizeTask(from, to);
-			
+		// 거의 마지막이 되면 둘 중 한개는 먼저 stop(done)이 될 것이다.
+		if(task.setRange(min, pivot)) {
 			if(!allocAccount(task)) {// account가 없다. - 그냥 기다린다.
 				task.pauseTask();
 			} else {
 				task.resumeTask();
 			}
 		} else {
-			task.pauseTask();
+			task.stopTask();
+		}
+		
+		if(task_.setRange(pivot + 1, last - 1)) {
+			if(!allocAccount(task_)) {// account가 없다. - 그냥 기다린다.
+				task_.pauseTask();
+			} else {
+				task_.resumeTask();
+			}
+		} else {
+			task_.stopTask();
 		}
 	}
 
@@ -331,7 +299,7 @@ public class Main implements TaskCallback, DatabaseCallback {
 		try {
 			database.join();
 		} catch (InterruptedException e) {
-			Logger.printException(e);
+			Logger.getInstance().printException(e);
 		}
 	}
 
@@ -343,7 +311,7 @@ public class Main implements TaskCallback, DatabaseCallback {
 	public synchronized void onDatabaseWritten(int written) {
 		done += written;
 		
-		Logger.printMessage("<Database> Progress : %d / %d. %.2f%% done.", done, size, getDatabaseProgress());
+		Logger.getInstance().printMessage("<Database> Written : %d / %d. %.2f%% done.", done, size, getDatabaseProgress());
 	}
 	
 	public float getDatabaseProgress() {
@@ -358,10 +326,12 @@ public class Main implements TaskCallback, DatabaseCallback {
 		try {
 			observer.join();//TODO: 나중에는 task들마다 join 달아서 observer와 상관없이 바로 끝낼 수 있도록(물론 observer도 종료되게) 해본다.
 		} catch (InterruptedException e) {
-			Logger.printException(e);
+			Logger.getInstance().printException(e);
 		}
 		
-		Logger.printMessage("<Task> All tasks finished.");
+		Logger.getInstance().printMessage("<Task> All tasks finished.");
+		
+		Logger.getInstance().release();//TODO: 다른 release 대상 더있는지 찾아보기.
 	}
 	
 	// 현재 알고리즘은 단순하다. schedule 만들고, schedule만큼 tasks 만든다.
@@ -391,7 +361,7 @@ public class Main implements TaskCallback, DatabaseCallback {
 			
 			task.setTaskId(tasks.indexOf(task));
 			
-			Logger.printMessage("<Task %d> Range : %d to %d. diff is %d.", task.getTaskId(), min, max, max - min);
+			Logger.getInstance().printMessage("<Task %d> Created : %d to %d. diff is %d.", task.getTaskId(), min, max, max - min);
 		}
 	}
 	
@@ -419,14 +389,14 @@ public class Main implements TaskCallback, DatabaseCallback {
 				accounts.add(account);
 			}
 		} catch(FileNotFoundException e) {
-			Logger.printException(e);
+			Logger.getInstance().printException(e);
 		} catch(IOException e) {
-			Logger.printException(e);
+			Logger.getInstance().printException(e);
 		} finally {
 			try {
 				reader.close();
 			} catch(IOException e) {
-				Logger.printException(e);
+				Logger.getInstance().printException(e);
 			}
 		}
 	}
@@ -467,7 +437,7 @@ public class Main implements TaskCallback, DatabaseCallback {
 				try {
 					Thread.sleep(PERIOD);
 				} catch(InterruptedException e) {
-					Logger.printException(e);
+					Logger.getInstance().printException(e);
 				}
 				
 				if(isAllTasksCompleted()) {

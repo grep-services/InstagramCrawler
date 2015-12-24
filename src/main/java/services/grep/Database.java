@@ -56,9 +56,9 @@ public class Database extends Thread {
 			statement = connection.createStatement();
 			preparedStatement = connection.prepareStatement(sql);
 		} catch(ClassNotFoundException e) {
-			Logger.printException(e);
+			Logger.getInstance().printException(e);
 		} catch(SQLException e) {
-			Logger.printException(e);
+			Logger.getInstance().printException(e);
 		}
 	}
 	
@@ -93,7 +93,7 @@ public class Database extends Thread {
 					int written = preparedStatement.executeBatch().length;// 일단 max_int까지 안가므로 large로 할 필요 없는 것 같다.
 					index += written;
 					
-					//Logger.printProgress(written);
+					//Logger.getInstance().printProgress(written);
 					callback.onDatabaseWritten(written);
 				}*/
 			}
@@ -103,8 +103,8 @@ public class Database extends Thread {
 			
 			callback.onDatabaseWritten(written);
 		} catch(SQLException e) {
-			Logger.printException(e);
-			Logger.printException(e.getNextException());
+			Logger.getInstance().printException(e);
+			Logger.getInstance().printException(e.getNextException());
 		}
 		
 		if(index < list.size()) {
@@ -116,7 +116,7 @@ public class Database extends Thread {
 			 * 어쨌든 현재는 writting 되든 말든 이미 retrive한 data에 대해서는 resizing하면서 진행하므로
 			 * data상에서의 문제는 있겠지만(하지만 기록을 해두므로 괜찮다.) 진행상의 문제는 없을 것이다. 
 			 */
-			Logger.printMessage(String.format("Database : writing failed. from %d to %d", extractId(list.get(list.size() - 1).getId()), extractId(list.get(index).getId())));
+			Logger.getInstance().printMessage(String.format("Database : writing failed. from %d to %d", extractId(list.get(list.size() - 1).getId()), extractId(list.get(index).getId())));
 		}
 		
 		release();
@@ -169,7 +169,7 @@ public class Database extends Thread {
 			statement.close();
 			connection.close();
 		} catch(SQLException e) {
-			Logger.printException(e);
+			Logger.getInstance().printException(e);
 		}
 	}
 	
