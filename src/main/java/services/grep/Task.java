@@ -43,10 +43,10 @@ public class Task extends Thread implements AccountCallback {
 	}
 	
 	// constructor 이외에도 set 될 일들 많다.
-	public void setAccount(Account account) {
+	public void setAccount(Account account) {/*
 		if(this.account != null) {// 이미 쓰던게 있었다면
 			this.account.updateStatus();// status 정리해준다.
-		}
+		}*///일단 이 부분은, account set 자체가 기존 account refresh를 수반하기에 필요없다고 생각한다.
 		
 		this.account = account;
 		
@@ -65,28 +65,52 @@ public class Task extends Thread implements AccountCallback {
 		while(status != Status.DONE) {
 			while(status == Status.WORKING) {// account, range 등이 exception 등에 의해 변경될 수 있다. 그 때 다시 working으로 돌리면서 진입한다.
 				//TODO: filtering하다가 exception 난 것까지는 어떻게 할 수가 없다. 그것은 그냥 crawling 몇 번 한 평균으로서 그냥 보증한다.
-				List<MediaFeedData> list = account.getListFromTag(tag, range.getMinimum(), range.getMaximum());
+				account.getListFromTag(tag, range.getMinimum(), range.getMaximum());
 			}
 		}
 	}
 	
 	@Override
 	public void onAccountDone(List<MediaFeedData> list) {
+		status = Status.UNAVAILABLE;// 진짜 done은 이후에 정해진다.
+		
 		callback.onTaskDone(this, list);
 	}
 
 	@Override
 	public void onAccountStop(List<MediaFeedData> list) {
+		status = Status.UNAVAILABLE;
+		
 		callback.onTaskStop(this, list);
 	}
 	
 	@Override
 	public void onAccountSplit(List<MediaFeedData> list, Task task) {
+		status = Status.UNAVAILABLE;
+		
 		callback.onTaskSplit(this, list, task);
+		
+		synchronized (task) {
+			task.notify();
+		}
 	}
 
-	public void splitTask(Task task) {
-		account.interrupt(task);// 멈추게 되고, 결국 exception 내면서 callback할 것이다.
+	public void splitTask(Task task, boolean interrupt) {
+		if(interrupt) {// 멈추게 되고, 결국 exception 내면서 callback할 것이다.
+			account.interrupt(task);
+			
+			synchronized (this) {
+				try {
+					this.wait();
+				} catch (InterruptedException e) {
+					Logger.getInstance().printException(e);
+				}
+			}
+		} else {// 이미 pause된 task라면 list null 한 후 직접 callback하면 된다.
+			status = Status.UNAVAILABLE;
+			
+			callback.onTaskSplit(this, null, task);
+		}
 	}
 	
 	public void startTask() {

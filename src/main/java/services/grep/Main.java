@@ -28,7 +28,7 @@ import org.jinstagram.entity.users.feed.MediaFeedData;
 
 public class Main implements TaskCallback, DatabaseCallback {
 
-	final String tag = "먹스타그램";
+	final String tag = "ㅂㅈ";
 	
 	List<Account> accounts;
 	List<Task> tasks;
@@ -138,32 +138,42 @@ public class Main implements TaskCallback, DatabaseCallback {
 		return completed;
 	}
 	
+	/*
+	 * 무조건 새로 alloc이 아니라, 자기것부터 검사하고
+	 * 자기것을 못쓰면 alloc하는 방식으로 간다.
+	 * 물론 자기가 null을 가질 때는 그냥 alloc하는 것도 포함이다.
+	 */
 	public boolean allocAccount(Task task) {
-		for(Account account : accounts) {
-			synchronized (account) {// 한 acc가 여러 task에 가지 않도록 lock.
-				if(account.getStatus() == Account.Status.WORKING) {//TODO: 여기도 처리...
-					if(account.getCallback().equals(task))
-					continue;
-				}
-				
-				account.updateStatus();
-				
-				if(account.getStatus() == Account.Status.FREE) {
-					task.setAccount(account);
+		synchronized (task) {
+			if(task.getAccount() != null && task.getAccount().updateStatus() == Account.Status.WORKING) {
+				return true;
+			}
+			
+			for(Account account : accounts) {
+				synchronized (account) {// 한 acc가 여러 task에 가지 않도록 lock.
+					account.updateStatus();
 					
-					return true;
+					if(account.getStatus() == Account.Status.FREE) {
+						task.setAccount(account);
+						
+						return true;
+					}
 				}
 			}
+			
+			return false;
 		}
-		
-		return false;
 	}
 	
 	public boolean allocSchedule(Task task) {
 		for(Task task_ : tasks) {
 			synchronized (task_) {
-				if(task_.getStatus() != Task.Status.DONE) {// done만 아니면 된다.
-					task_.splitTask(task);
+				if(!task_.equals(task) && task_.getStatus() != Task.Status.DONE) {// done만 아니면 된다.
+					if(task_.getStatus() == Task.Status.WORKING) {
+						task_.splitTask(task, true);
+					} else {
+						task_.splitTask(task, false);
+					}
 					
 					return true;
 				}
@@ -177,56 +187,54 @@ public class Main implements TaskCallback, DatabaseCallback {
 	public void onTaskDone(Task task, List<MediaFeedData> list) {// 남의걸 갖고와서 자기가 나눠가진다.
 		writeListToDB(list);
 		
-		processTaskProgress(task, task.getRange().getMinimum(), task.getRange().getMaximum());
-		
-		task.setRange(null);
-		
-		if(!allocSchedule(task)) {// 아무것도 할당 못했다 - 다 끝났다.
-			task.stopTask();
-		}/* else {
-			if(!allocAccount(task)) {// account가 없다. - 그냥 기다린다.
-				task.pauseTask();
-			} else {
-				task.resumeTask();
-			}
-		}*/ //TODO: 왜 굳이 ALLOC을 또함? 그냥 돌리기. 다른곳들도.
+		synchronized (task) {
+			processTaskProgress(task, task.getRange().getMinimum(), task.getRange().getMaximum());
+			
+			task.setRange(null);
+			
+			if(!allocSchedule(task)) {// 아무것도 할당 못했다 - 다 끝났다.
+				task.stopTask();
+			}// alloc schedule이 제대로 되었다면 나머지는 onsplit에서 다 처리될 것이다.
+		}
 	}
 
 	@Override
 	public void onTaskStop(Task task, List<MediaFeedData> list) {// 자기것을 다시 실행한다.
 		writeListToDB(list);
 		
-		if(list != null && !list.isEmpty()) {
-			long last = extractId(list.get(list.size() - 1).getId());
-			
-			processTaskProgress(task, last, task.getRange().getMaximum());
-			
-			if(task.setRange(task.getRange().getMinimum(), last - 1)) {
-				if(!allocAccount(task)) {// account가 없다. - 그냥 기다린다.
-					task.pauseTask();
-				} else {
-					task.resumeTask();
-				}
-			} else {// stop도 done과 같은 stop이 있을 수 있다.
-				task.setRange(task.getRange().getMinimum(), task.getRange().getMaximum());
+		synchronized (task) {
+			if(list != null && !list.isEmpty()) {
+				long last = extractId(list.get(list.size() - 1).getId());
 				
-				if(!allocSchedule(task)) {// 아무것도 할당 못했다 - 다 끝났다.
-					task.stopTask();
-				} else {
+				processTaskProgress(task, last, task.getRange().getMaximum());
+				
+				if(task.setRange(task.getRange().getMinimum(), last - 1)) {
 					if(!allocAccount(task)) {// account가 없다. - 그냥 기다린다.
 						task.pauseTask();
 					} else {
 						task.resumeTask();
 					}
+				} else {// stop도 done과 같은 stop이 있을 수 있다.
+					task.setRange(task.getRange().getMinimum(), task.getRange().getMaximum());
+					
+					if(!allocSchedule(task)) {// 아무것도 할당 못했다 - 다 끝났다.
+						task.stopTask();
+					} else {
+						if(!allocAccount(task)) {// account가 없다. - 그냥 기다린다.
+							task.pauseTask();
+						} else {
+							task.resumeTask();
+						}
+					}
 				}
-			}
-		} else {
-			processTaskProgress(task, 0);
-			
-			if(!allocAccount(task)) {// account가 없다. - 그냥 기다린다.
-				task.pauseTask();
 			} else {
-				task.resumeTask();
+				processTaskProgress(task, 0);
+				
+				if(!allocAccount(task)) {// account가 없다. - 그냥 기다린다.
+					task.pauseTask();
+				} else {
+					task.resumeTask();
+				}
 			}
 		}
 	}
@@ -244,37 +252,42 @@ public class Main implements TaskCallback, DatabaseCallback {
 	public void onTaskSplit(Task task, List<MediaFeedData> list, Task task_) {// 절반만 다시 실행한다.
 		writeListToDB(list);
 		
-		long last;
+		long last, min, pivot;
 		
-		if(list != null && !list.isEmpty()) {
-			last = extractId(list.get(list.size() - 1).getId());
-		} else {
-			last = task.getRange().getMaximum() + 1;
-		}
-		processTaskProgress(task, last, task.getRange().getMaximum());
-		
-		long min = task.getRange().getMinimum();
-		long pivot = (min + (last - 1)) / 2;
-		
-		// 거의 마지막이 되면 둘 중 한개는 먼저 stop(done)이 될 것이다.
-		if(task.setRange(min, pivot)) {
-			if(!allocAccount(task)) {// account가 없다. - 그냥 기다린다.
-				task.pauseTask();
+		synchronized (task) {
+			if(list != null && !list.isEmpty()) {
+				last = extractId(list.get(list.size() - 1).getId());
 			} else {
-				task.resumeTask();
+				last = task.getRange().getMaximum() + 1;
 			}
-		} else {
-			task.stopTask();
+			
+			processTaskProgress(task, last, task.getRange().getMaximum());
+			
+			min = task.getRange().getMinimum();
+			pivot = (min + (last - 1)) / 2;
+			
+			// 거의 마지막이 되면 둘 중 한개는 먼저 stop(done)이 될 것이다.
+			if(task.setRange(min, pivot)) {
+				if(!allocAccount(task)) {// account가 없다. - 그냥 기다린다.
+					task.pauseTask();
+				} else {
+					task.resumeTask();
+				}
+			} else {
+				task.stopTask();
+			}
 		}
 		
-		if(task_.setRange(pivot + 1, last - 1)) {
-			if(!allocAccount(task_)) {// account가 없다. - 그냥 기다린다.
-				task_.pauseTask();
+		synchronized (task_) {
+			if(task_.setRange(pivot + 1, last - 1)) {
+				if(!allocAccount(task_)) {// account가 없다. - 그냥 기다린다.
+					task_.pauseTask();
+				} else {
+					task_.resumeTask();
+				}
 			} else {
-				task_.resumeTask();
+				task_.stopTask();
 			}
-		} else {
-			task_.stopTask();
 		}
 	}
 
@@ -425,7 +438,7 @@ public class Main implements TaskCallback, DatabaseCallback {
 								if(allocAccount(task)) {
 									task.startTask();
 								}
-							} else if(task.getAccount().getStatus() == Account.Status.UNAVAILABLE) {// exceeded
+							} else {
 								if(allocAccount(task)) {// 이미 pause, resize되어 있다. 할당해보고 되면 resume하고, 안되면 다시 pass.
 									task.resumeTask();
 								};

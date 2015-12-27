@@ -1,4 +1,5 @@
 package main.java.services.grep;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
@@ -124,8 +125,8 @@ public class Account {
 	 * 즉, 여기서는 무조건 값만 받고, 자연스럽게 또는 exception에 의해 return한다.
 	 * 2차 exception은 애초에 여기서 바로 다시 시도하는 것이 아니기 때문에 고려할 필요 없다.
 	 */
-	public List<MediaFeedData> getListFromTag(String tag, long from, long to) {
-		List<MediaFeedData> result = null;
+	public void getListFromTag(String tag, long from, long to) {
+		List<MediaFeedData> result = new ArrayList<MediaFeedData>();// 값 유지를 위해 공간은 만들어두어야 한다.
 		
 		try {
 			// library가 object 구조를 좀 애매하게 해놓아서, 바로 loop 하기보다, 1 cycle은 직접 작성해주는 구조가 되었다.
@@ -140,11 +141,9 @@ public class Account {
 					List<MediaFeedData> nextData = nextList.getData();
 					
 		            while(true) {
-		            	if(!addFilteredData(nextData, result, from, to)) {// filter가 안되어야만 다음으로 넘어가고, 아니면 그냥 그대로 끝이다.
+		            	if(!addFilteredData(result, nextData, from, to)) {// filter가 안되어야만 다음으로 넘어가고, 아니면 그냥 그대로 끝이다.
 		            		if(interrupted) {
-		            			interrupted = false;
-		            			
-		            			throw new Exception("Interrupted");
+		            			break;
 		            		}
 		            		
 			    			if(nextPage.hasNextPage()) {
@@ -161,17 +160,23 @@ public class Account {
 				}
 			}
 			
-			callback.onAccountDone(result);
+			if(!interrupted) {
+				callback.onAccountDone(result);
+			} else {
+				interrupted = false;
+				
+				callback.onAccountSplit(result, task);// 어차피 이렇게 be called되므로 항상 reset된다고 보면 된다.
+			}// 이 과정에서 다시 exception이 나는 문제만 없다면 괜찮다.
 		} catch (Exception e) {
 			//TODO: 복잡성 때문에 제거했지만, 필요하다면 limit, io, etc 등 exception 이유 구분해서 처리 가능.
-			if(e.getMessage() != null && e.getMessage().equals("Interrupted")) {
-				callback.onAccountSplit(result, task);// 어차피 이렇게 be called되므로 항상 reset된다고 보면 된다.
-			} else {
+			if(!interrupted) {
 				callback.onAccountStop(result);
+			} else {
+				interrupted = false;
+				
+				callback.onAccountSplit(result, task);// 어차피 이렇게 be called되므로 항상 reset된다고 보면 된다.
 			}
 		}
-		
-		return result;
 	}
 	
 	/*
@@ -197,12 +202,13 @@ public class Account {
 					}
 				}
 			}
-			
+			/*
 			if(list != null) {
 				list.addAll(data);
 			} else {
-				list = data;
-			}
+				list = new ArrayList<MediaFeedData>(data);//TODO: 여기서 REF 전달이 제대로 안된다.
+			}*/
+			list.addAll(data);
 			
 			return lower || upper;
 		} else {
@@ -231,16 +237,22 @@ public class Account {
 		return remaining;
 	}
 	
-	public void updateStatus() {//TODO: SYNC 해야 되는 것 아닌지.
+	public Status updateStatus() {//TODO: SYNC 해야 되는 것 아닌지.
 		int remaining = getRateRemaining();
 		
 		if(remaining != -1) {
 			if(remaining < 5000 / 2) {
-				status = Status.UNAVAILABLE;
+				status = Status.UNAVAILABLE;// 잘 되던 task가 stop되었다가 여기에서 잠시 pause되어있을 수도 있을 것이다.
 			} else {
-				status = Status.FREE;
+				if(status == Status.UNAVAILABLE) {
+					status = Status.FREE;
+				}// 나머지는 working, free 그대로 두면 된다.
 			}
+		} else {
+			status = Status.UNAVAILABLE;
 		}
+		
+		return status;
 	}
 	
 	public void setStatus(Status status) {
