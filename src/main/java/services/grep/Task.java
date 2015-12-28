@@ -60,8 +60,6 @@ public class Task extends Thread implements AccountCallback {
 
 	@Override
 	public void run() {
-		Logger.getInstance().printMessage("<Task %d> Running", id);
-		
 		while(status != Status.DONE) {
 			while(status == Status.WORKING) {// account, range 등이 exception 등에 의해 변경될 수 있다. 그 때 다시 working으로 돌리면서 진입한다.
 				//TODO: filtering하다가 exception 난 것까지는 어떻게 할 수가 없다. 그것은 그냥 crawling 몇 번 한 평균으로서 그냥 보증한다.
@@ -72,22 +70,16 @@ public class Task extends Thread implements AccountCallback {
 	
 	@Override
 	public void onAccountDone(List<MediaFeedData> list) {
-		status = Status.UNAVAILABLE;// 진짜 done은 이후에 정해진다.
-		
 		callback.onTaskDone(this, list);
 	}
 
 	@Override
 	public void onAccountStop(List<MediaFeedData> list) {
-		status = Status.UNAVAILABLE;
-		
 		callback.onTaskStop(this, list);
 	}
 	
 	@Override
 	public void onAccountSplit(List<MediaFeedData> list, Task task) {
-		status = Status.UNAVAILABLE;
-		
 		callback.onTaskSplit(this, list, task);
 		
 		synchronized (task) {
@@ -96,6 +88,8 @@ public class Task extends Thread implements AccountCallback {
 	}
 
 	public void splitTask(Task task, boolean interrupt) {
+		Logger.getInstance().printMessage("<Task %d> Spliting", id);
+		
 		if(interrupt) {// 멈추게 되고, 결국 exception 내면서 callback할 것이다.
 			account.interrupt(task);
 			
@@ -107,8 +101,6 @@ public class Task extends Thread implements AccountCallback {
 				}
 			}
 		} else {// 이미 pause된 task라면 list null 한 후 직접 callback하면 된다.
-			status = Status.UNAVAILABLE;
-			
 			callback.onTaskSplit(this, null, task);
 		}
 	}
@@ -126,14 +118,20 @@ public class Task extends Thread implements AccountCallback {
 	}
 	
 	public void stopTask() {
+		Logger.getInstance().printMessage("<Task %d> Finished", id);
+		
 		status = Status.DONE;
 	}
 	
 	public void pauseTask() {
+		Logger.getInstance().printMessage("<Task %d> Paused", id);
+		
 		status = Status.UNAVAILABLE;
 	}
 	
 	public void resumeTask() {
+		Logger.getInstance().printMessage("<Task %d> Resumed", id);
+		
 		status = Status.WORKING;
 	}
 	
@@ -146,6 +144,12 @@ public class Task extends Thread implements AccountCallback {
 	}
 	
 	public void setRange(Range<Long> range) {
+		if(range != null) {
+			Logger.getInstance().printMessage("<Task %d> Range arranged : %d, %d", id, range.getMinimum(), range.getMaximum());
+		} else {
+			Logger.getInstance().printMessage("<Task %d> Range arranged : null", id);
+		}
+		
 		this.range = range;
 	}
 	

@@ -167,8 +167,9 @@ public class Main implements TaskCallback, DatabaseCallback {
 	
 	public boolean allocSchedule(Task task) {
 		for(Task task_ : tasks) {
-			synchronized (task_) {
-				if(!task_.equals(task) && task_.getStatus() != Task.Status.DONE) {// done만 아니면 된다.
+			try {
+			if(/*!task_.equals(task) && task_.getStatus() != Task.Status.DONE && */task_.getAccount().getInterruptable()) {// 여기서 sync 대기가 많이 난다.
+				synchronized (task_) {
 					if(task_.getStatus() == Task.Status.WORKING) {
 						task_.splitTask(task, true);
 					} else {
@@ -177,6 +178,9 @@ public class Main implements TaskCallback, DatabaseCallback {
 					
 					return true;
 				}
+			}
+			} catch (Exception e) {
+				Logger.getInstance().printMessage("stop");
 			}
 		}
 		
@@ -276,17 +280,17 @@ public class Main implements TaskCallback, DatabaseCallback {
 			} else {
 				task.stopTask();
 			}
-		}
 		
-		synchronized (task_) {
-			if(task_.setRange(pivot + 1, last - 1)) {
-				if(!allocAccount(task_)) {// account가 없다. - 그냥 기다린다.
-					task_.pauseTask();
+			synchronized (task_) {
+				if(task_.setRange(pivot + 1, last - 1)) {
+					if(!allocAccount(task_)) {// account가 없다. - 그냥 기다린다.
+						task_.pauseTask();
+					} else {
+						task_.resumeTask();
+					}
 				} else {
-					task_.resumeTask();
+					task_.stopTask();
 				}
-			} else {
-				task_.stopTask();
 			}
 		}
 	}

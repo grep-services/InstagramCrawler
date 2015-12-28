@@ -43,6 +43,7 @@ public class Account {
 	//private static final int query_batch = 1000;
 	//private static final int database_batch = 10000;
 	
+	boolean interruptable = false;
 	boolean interrupted = false;
 	Task task;// for split
 	
@@ -142,7 +143,13 @@ public class Account {
 					
 		            while(true) {
 		            	if(!addFilteredData(result, nextData, from, to)) {// filter가 안되어야만 다음으로 넘어가고, 아니면 그냥 그대로 끝이다.
+		            		if(!interruptable) {
+		            			interruptable = true;
+		            		}
+		            		
 		            		if(interrupted) {
+		            			interruptable = false;
+		            			
 		            			break;
 		            		}
 		            		
@@ -177,6 +184,14 @@ public class Account {
 				callback.onAccountSplit(result, task);// 어차피 이렇게 be called되므로 항상 reset된다고 보면 된다.
 			}
 		}
+	}
+	
+	public boolean getInterruptable() {
+		return interruptable;
+	}
+	
+	public void setInterruptable(boolean interruptable) {
+		this.interruptable = interruptable;
 	}
 	
 	/*
