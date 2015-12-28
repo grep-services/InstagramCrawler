@@ -150,7 +150,7 @@ public class Account {
 		            		if(interrupted) {
 		            			interruptable = false;
 		            			
-		            			break;
+		            			throw new Result()
 		            		}
 		            		
 			    			if(nextPage.hasNextPage()) {
