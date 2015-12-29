@@ -46,8 +46,6 @@ public class Account {
 	boolean interruptable = false;
 	boolean interrupted = false;
 	Task task;// for split
-	
-	AccountCallback callback;
 
 	public Account(String clientId, String clientSecret, String accessToken) {
 		this.clientId = clientId;
@@ -63,21 +61,6 @@ public class Account {
 		Token token = new Token(accessToken, clientSecret);
 		
 		instagram = new Instagram(token);
-	}
-	
-	// task에 할당될 때마다 바뀔 수 있다.
-	public void setCallback(AccountCallback callback) {
-		this.callback = callback;
-	}
-	
-	public AccountCallback getCallback() {
-		return callback;
-	}
-	
-	public void interrupt(Task task) {
-		this.task = task;
-		
-		interrupted = true;
 	}
 	
 	public long getTagCount(String tag) {
@@ -126,7 +109,7 @@ public class Account {
 	 * 즉, 여기서는 무조건 값만 받고, 자연스럽게 또는 exception에 의해 return한다.
 	 * 2차 exception은 애초에 여기서 바로 다시 시도하는 것이 아니기 때문에 고려할 필요 없다.
 	 */
-	public void getListFromTag(String tag, long from, long to) {
+	public List<MediaFeedData> getListFromTag(String tag, long from, long to) throws Exception {
 		List<MediaFeedData> result = new ArrayList<MediaFeedData>();// 값 유지를 위해 공간은 만들어두어야 한다.
 		
 		try {
@@ -148,9 +131,9 @@ public class Account {
 		            		}
 		            		
 		            		if(interrupted) {
-		            			interruptable = false;
+		            			interrupted = false;
 		            			
-		            			throw new Result()
+		            			throw new Result(Result.Status.SPLIT, result, task);
 		            		}
 		            		
 			    			if(nextPage.hasNextPage()) {
@@ -166,32 +149,45 @@ public class Account {
 		            }
 				}
 			}
-			
-			if(!interrupted) {
-				callback.onAccountDone(result);
-			} else {
-				interrupted = false;
-				
-				callback.onAccountSplit(result, task);// 어차피 이렇게 be called되므로 항상 reset된다고 보면 된다.
-			}// 이 과정에서 다시 exception이 나는 문제만 없다면 괜찮다.
 		} catch (Exception e) {
-			//TODO: 복잡성 때문에 제거했지만, 필요하다면 limit, io, etc 등 exception 이유 구분해서 처리 가능.
-			if(!interrupted) {
-				callback.onAccountStop(result);
+			if(e instanceof Result) {
+				throw e;
+			} else if (e instanceof InstagramException){
+				/*
+				 * 모든 instagramexception이 limit문제는 아니지만, 어차피 account change 정도이므로 괜찮다.
+				 * 실제적으로는 instagramexception(limit를 포함한) 자체가 거의 안날 것이고
+				 * 난다 하더라도 할당할 account가 없을 것이며 결국 task는 unavailable에 빠져 있다가 account가 free되면서 다시 자기 account를 갖게 될 확률이 높다.
+				 */
+				if(interrupted) {// interrupted인 채로 올 수도 있다. 다만 result가 없는 등의 문제는 있을 수 있다.
+					interrupted = false;
+					
+					throw new Result(Result.Status.LIMIT, result, task);
+				} else {
+					throw new Result(Result.Status.LIMIT, result, null);
+				}
 			} else {
-				interrupted = false;
-				
-				callback.onAccountSplit(result, task);// 어차피 이렇게 be called되므로 항상 reset된다고 보면 된다.
+				if(interrupted) {// interrupted인 채로 올 수도 있다. 다만 result가 없는 등의 문제는 있을 수 있다.
+					interrupted = false;
+					
+					throw new Result(Result.Status.NORMAL, result, task);
+				} else {
+					throw new Result(Result.Status.NORMAL, result, null);
+				}
 			}
 		}
+		
+		return result;
+	}
+	
+	public void interrupt(Task task) {
+		this.task = task;
+		
+		interruptable = false;// interrupt하면서 monitor 유지한 상태로 off해야 다른 task한테 또 잡혀가지 않는다.
+		interrupted = true;
 	}
 	
 	public boolean getInterruptable() {
 		return interruptable;
-	}
-	
-	public void setInterruptable(boolean interruptable) {
-		this.interruptable = interruptable;
 	}
 	
 	/*
@@ -217,12 +213,7 @@ public class Account {
 					}
 				}
 			}
-			/*
-			if(list != null) {
-				list.addAll(data);
-			} else {
-				list = new ArrayList<MediaFeedData>(data);//TODO: 여기서 REF 전달이 제대로 안된다.
-			}*/
+			
 			list.addAll(data);
 			
 			return lower || upper;
@@ -284,12 +275,6 @@ public class Account {
 	
 	public int getAccountId() {
 		return id;
-	}
-	
-	public interface AccountCallback {
-		void onAccountDone(List<MediaFeedData> list);
-		void onAccountStop(List<MediaFeedData> list);
-		void onAccountSplit(List<MediaFeedData> list, Task task);
 	}
 	
 }

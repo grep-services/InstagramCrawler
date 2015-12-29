@@ -19,7 +19,7 @@ import org.jinstagram.entity.users.feed.MediaFeedData;
  *
  */
 
-public class Task extends Thread implements AccountCallback {
+public class Task extends Thread {
 
 	public enum Status {// 단순히 boolean으로는 정확히 다룰 수가 없고, 그러면 꼬일 수가 있어서 이렇게 간다.
 		UNAVAILABLE, WORKING, DONE;
@@ -50,7 +50,6 @@ public class Task extends Thread implements AccountCallback {
 		
 		this.account = account;
 		
-		account.setCallback(this);
 		account.setStatus(Account.Status.WORKING);// 단순하게, 할당된 시점부터를 working이라 잡는다.
 	}
 	
@@ -63,27 +62,36 @@ public class Task extends Thread implements AccountCallback {
 		while(status != Status.DONE) {
 			while(status == Status.WORKING) {// account, range 등이 exception 등에 의해 변경될 수 있다. 그 때 다시 working으로 돌리면서 진입한다.
 				//TODO: filtering하다가 exception 난 것까지는 어떻게 할 수가 없다. 그것은 그냥 crawling 몇 번 한 평균으로서 그냥 보증한다.
-				account.getListFromTag(tag, range.getMinimum(), range.getMaximum());
+				List<MediaFeedData> list;
+				
+				try {
+					list = account.getListFromTag(tag, range.getMinimum(), range.getMaximum());
+					
+					/*
+					 * 정상적일 때 - 일단 break 상태에서, 다른 task split한다.
+					 * 다만 이 과정은 task를 다 가지고 있는 main에서 처리할 수 있기 때문에 callback해야 한다.
+					 * 물론 0으로 resize부터 해준다.
+					 */
+					setRange(null);
+					
+					callback.onTaskSplit_();
+					
+				} catch (Exception e) {
+					Result result = (Result) e;
+					
+					if(result.getStatus() == Result.Status.NORMAL) {
+						// 일반적인 exception - 그냥 재시작하면 된다. 즉, break할 것도 없이, resize만 하면 된다. - split 유무 check 필요.
+					} else if(result.getStatus() == Result.Status.LIMIT) {
+						// limit exceeded - account change 하고 resize. 되면 그대로, 안되면 break. - split 유무 check 필요.
+					} else {
+						/*
+						 * split 될 때 - 남은 부분을 split하고 resize.
+						 * 특히 break된 task는 resize후 resume해준다.
+						 * 다만 남은게 split limit 이하면 break된 task는 done으로 처리해서 빠져나가게 해준다.
+						 */
+					}
+				}
 			}
-		}
-	}
-	
-	@Override
-	public void onAccountDone(List<MediaFeedData> list) {
-		callback.onTaskDone(this, list);
-	}
-
-	@Override
-	public void onAccountStop(List<MediaFeedData> list) {
-		callback.onTaskStop(this, list);
-	}
-	
-	@Override
-	public void onAccountSplit(List<MediaFeedData> list, Task task) {
-		callback.onTaskSplit(this, list, task);
-		
-		synchronized (task) {
-			task.notify();
 		}
 	}
 
@@ -183,6 +191,8 @@ public class Task extends Thread implements AccountCallback {
 		void onTaskDone(Task task, List<MediaFeedData> list);
 		void onTaskStop(Task task, List<MediaFeedData> list);
 		void onTaskSplit(Task task, List<MediaFeedData> list, Task task_);
+		
+		void onTaskSplit_(Task task, );
 	}
 	
 }
