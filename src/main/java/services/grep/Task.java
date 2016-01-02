@@ -3,6 +3,7 @@ package main.java.services.grep;
 import java.util.List;
 
 import main.java.services.grep.Account.AccountCallback;
+import main.java.services.grep.Database.DatabaseCallback;
 
 import org.apache.commons.lang3.Range;
 import org.jinstagram.entity.users.feed.MediaFeedData;
@@ -19,7 +20,7 @@ import org.jinstagram.entity.users.feed.MediaFeedData;
  *
  */
 
-public class Task extends Thread {
+public class Task extends Thread implements AccountCallback, DatabaseCallback {
 
 	public enum Status {// 단순히 boolean으로는 정확히 다룰 수가 없고, 그러면 꼬일 수가 있어서 이렇게 간다.
 		UNAVAILABLE, WORKING, DONE;
@@ -30,6 +31,9 @@ public class Task extends Thread {
 	String tag;
 	Account account;
 	Range<Long> range;
+	
+	private static final long BOUND = 10000;// 대략 20 * LIMIT 정도로 해서 LIMIT 안넘을 정도로 잡았다.(중요한 기준은 아니다.)
+	
 	TaskCallback callback;
 	
 	public Task(String tag, Range<Long> range, TaskCallback callback) {
@@ -43,18 +47,43 @@ public class Task extends Thread {
 	}
 	
 	// constructor 이외에도 set 될 일들 많다.
-	public void setAccount(Account account) {/*
-		if(this.account != null) {// 이미 쓰던게 있었다면
-			this.account.updateStatus();// status 정리해준다.
-		}*///일단 이 부분은, account set 자체가 기존 account refresh를 수반하기에 필요없다고 생각한다.
-		
+	public void setAccount(Account account) {
 		this.account = account;
 		
 		account.setStatus(Account.Status.WORKING);// 단순하게, 할당된 시점부터를 working이라 잡는다.
+		account.setCallback(this);
 	}
 	
 	public Account getAccount() {
 		return account;
+	}
+	
+	public void writeListToDB(List<MediaFeedData> list) {
+		if(list == null || list.isEmpty()) {
+			return;
+		}
+		
+		// 일단 1개로 진행해본다.
+		Database database = new Database(list, this);
+		
+		database.start();
+		
+		/*
+		 * 필요한 이유는, 최종적으로 보면 all task finished 이후 바로 종료되면
+		 * db write를 하지 못한다.
+		 * 그뿐만 아니라 task 자체가 done될 때에도 언제 task의 list ref가 죽을 지 모른다.
+		 * 따라서 어차피 task는 thread이고 주기적 write도 아니므로 wait를 하도록 한다.
+		 */
+		try {
+			database.join();
+		} catch (InterruptedException e) {
+			Logger.getInstance().printException(e);
+		}
+	}
+
+	@Override
+	public void onDatabaseWritten(int written) {
+		callback.onTaskWritten(written);
 	}
 
 	@Override
@@ -64,57 +93,89 @@ public class Task extends Thread {
 				//TODO: filtering하다가 exception 난 것까지는 어떻게 할 수가 없다. 그것은 그냥 crawling 몇 번 한 평균으로서 그냥 보증한다.
 				List<MediaFeedData> list;
 				
-				try {
+				try {// 정상적일 때 - 일단 break 상태에서, 다른 task split한다.
 					list = account.getListFromTag(tag, range.getMinimum(), range.getMaximum());
 					
-					/*
-					 * 정상적일 때 - 일단 break 상태에서, 다른 task split한다.
-					 * 다만 이 과정은 task를 다 가지고 있는 main에서 처리할 수 있기 때문에 callback해야 한다.
-					 * 물론 0으로 resize부터 해준다.
-					 */
-					setRange(null);
+					writeListToDB(list);// 일단 db write부터.
 					
-					callback.onTaskSplit_();
+					setRange(null);// 0으로 resize도 해준다.(사실 상징적인 의미)
 					
+					pauseTask();// 미리 break되도록 해놓으면 아래 method에서 status가 바로 바뀌든 나중에 바뀌든 문제없이 돌아갈 것이다.
+					
+					if(callback.onTaskFree(this)) {// task를 다 가지고 있는 main에서 처리할 수 있기 때문에 callback해야 한다.
+						stopTask();// 이것이 실행된다는 말은 callback 내부에서의 interrupt는 없다는 것을 보증한다.
+					}// else의 경우는 그냥 callback의 실행 내용에 따르며 range, status 등도 알아서 결정될 것이다.
 				} catch (Exception e) {
 					Result result = (Result) e;
 					
-					if(result.getStatus() == Result.Status.NORMAL) {
-						// 일반적인 exception - 그냥 재시작하면 된다. 즉, break할 것도 없이, resize만 하면 된다. - split 유무 check 필요.
-					} else if(result.getStatus() == Result.Status.LIMIT) {
-						// limit exceeded - account change 하고 resize. 되면 그대로, 안되면 break. - split 유무 check 필요.
-					} else {
-						/*
-						 * split 될 때 - 남은 부분을 split하고 resize.
-						 * 특히 break된 task는 resize후 resume해준다.
-						 * 다만 남은게 split limit 이하면 break된 task는 done으로 처리해서 빠져나가게 해준다.
-						 */
+					list = result.getResult();
+					
+					writeListToDB(list);// 일단 db write부터.
+					
+					setRange(range.getMinimum(), (list != null && !list.isEmpty()) ? extractId(list.get(list.size() - 1).getId()) - 1 : range.getMaximum());
+					
+					Task task = result.getTask();// 필요하다면 this를 split해서 task에게 나눠줄 것이다.
+					
+					if(result.getStatus() == Result.Status.NORMAL) {// 일반적인 exception - split 있을 때만 하면 된다.(없을 때는 위에서 이미 range set)
+						if(task != null) {
+							splitTask(this, task);
+						}
+					} else if(result.getStatus() == Result.Status.LIMIT) {// limit exceeded - account change. 안되면 break. split 유무 check 필요.
+						if(!callback.onTaskDischarged(this)) {// split에 상관없이 change가 실패하면 break 예약해둔다.
+							pauseTask();//TODO: 이부분도 LIMIT와 RANGE NULL이 동시에 일어나는 경우(OBSERVER에서처럼)에 대해 다루어야 한다. 안그럼 여기서부터 바로 ACCOUNT NPE 날 것이다.
+						}// else는 그냥 놔두면 된다.
+						
+						if(task != null) {
+							splitTask(this, task);
+						}
+					} else {// split - 그냥 하면 된다.
+						splitTask(this, task);
 					}
 				}
 			}
 		}
 	}
-
-	public void splitTask(Task task, boolean interrupt) {
-		Logger.getInstance().printMessage("<Task %d> Spliting", id);
-		
-		if(interrupt) {// 멈추게 되고, 결국 exception 내면서 callback할 것이다.
-			account.interrupt(task);
+	
+	public long extractId(String string) {
+		return Long.valueOf(string.split("_")[0]);
+	}
+	
+	// this를 interrupt해서 task_도 나눠 받아라는 method.
+	public void interruptTask(Task task_) {
+		account.interrupt(task_);// account break한 다음에 exception을 통해 this의 while로 넘어오려는 계획.
+	}
+	
+	public boolean isInterruptable() {
+		return account.getInterruptable();
+	}
+	
+	/*
+	 * limit, normal, split 등 어디에서도 interrupted되어서 온 것에게 통일적으로 완벽한 split을 해주기 위한 내부 method.
+	 * task를 쪼개서 task_에게 준다. 만약 쪼갤 것이 없으면 task혼자 처리하고 task_는 그냥 pause로 놔둔다.
+	 * 쪼개서 나눴을 때는, task는 물론 working status에서 온 것이지만 task_는 unavailable status일 수가 있는 만큼 resume을 시켜준다.
+	 * 그리고 이전에 task 자체마저도 처리할 것이 없으면 free callback 한다.
+	 */
+	private void splitTask(Task task, Task task_) {//TODO: 잘 판단해서 SYNC 하기. 일단 sync할 필요 없을 것 같아서 안했다.
+		if(task.getRange() == null) {// split도 꼭 while에서 되었을 것이란 보장은 없기에 충분히 range null은 가능하다.
+			task.pauseTask();
 			
-			synchronized (this) {
-				try {
-					this.wait();
-				} catch (InterruptedException e) {
-					Logger.getInstance().printException(e);
-				}
-			}
-		} else {// 이미 pause된 task라면 list null 한 후 직접 callback하면 된다.
-			callback.onTaskSplit(this, null, task);
+			callback.onTaskFree(task);
+		} else {
+			long size = task.getRange().getMaximum() - task.getRange().getMinimum();
+			
+			if(size > BOUND) {
+				long pivot = size / 2;
+				
+				task.setRange(task.getRange().getMinimum(), task.getRange().getMinimum() + pivot);
+				
+				task_.setRange(pivot + 1, task.getRange().getMaximum());// size >= 1 만 되어도 이 range는 최소 size 1이 되어서 문제없다.
+				task_.resumeTask();
+			}// bound보다 작은 것에 대해서는, task가 그대로 떠맡을 것이고, task_는 그대로 unavailable을 유지할 것이다.
 		}
 	}
 	
 	public void startTask() {
-		Logger.getInstance().printMessage("<Task %d> Started", id);
+		Logger.getInstance().printMessage("<Task %d> Started.", id);
 		
 		try {
 			status = Status.WORKING;
@@ -126,19 +187,19 @@ public class Task extends Thread {
 	}
 	
 	public void stopTask() {
-		Logger.getInstance().printMessage("<Task %d> Finished", id);
+		Logger.getInstance().printMessage("<Task %d> Done.", id);
 		
 		status = Status.DONE;
 	}
 	
 	public void pauseTask() {
-		Logger.getInstance().printMessage("<Task %d> Paused", id);
+		Logger.getInstance().printMessage("<Task %d> Paused.", id);
 		
 		status = Status.UNAVAILABLE;
 	}
 	
 	public void resumeTask() {
-		Logger.getInstance().printMessage("<Task %d> Resumed", id);
+		Logger.getInstance().printMessage("<Task %d> Resumed.", id);
 		
 		status = Status.WORKING;
 	}
@@ -152,12 +213,6 @@ public class Task extends Thread {
 	}
 	
 	public void setRange(Range<Long> range) {
-		if(range != null) {
-			Logger.getInstance().printMessage("<Task %d> Range arranged : %d, %d", id, range.getMinimum(), range.getMaximum());
-		} else {
-			Logger.getInstance().printMessage("<Task %d> Range arranged : null", id);
-		}
-		
 		this.range = range;
 	}
 	
@@ -188,11 +243,10 @@ public class Task extends Thread {
 	}
 
 	public interface TaskCallback {
-		void onTaskDone(Task task, List<MediaFeedData> list);
-		void onTaskStop(Task task, List<MediaFeedData> list);
-		void onTaskSplit(Task task, List<MediaFeedData> list, Task task_);
-		
-		void onTaskSplit_(Task task, );
+		boolean onTaskFree(Task task);
+		boolean onTaskDischarged(Task task);
+		void onTaskTravelled(Task task, long visited);
+		void onTaskWritten(int written);
 	}
 	
 }

@@ -26,7 +26,7 @@ import org.jinstagram.entity.users.feed.MediaFeedData;
  *
  */
 
-public class Main implements TaskCallback, DatabaseCallback {
+public class Main implements TaskCallback {
 
 	final String tag = "ㅂㅈ";
 	
@@ -90,11 +90,7 @@ public class Main implements TaskCallback, DatabaseCallback {
 		return id;
 	}
 	
-	public void processTaskProgress(Task task, long from, long to) {
-		processTaskProgress(task, to - from + 1);
-	}
-	
-	public synchronized void processTaskProgress(Task task, long visited) {
+	public synchronized void showTaskProgress(Task task, long visited) {
 		this.visited += visited;
 		
 		Logger.getInstance().printMessage("<Task %d> Travelled : %d / %d. %.2f%% done in %s and %s remains.", task != null ? task.getTaskId() : -1, this.visited, diff, getTaskProgress(), getTaskElapsedTime(), getTaskRemainingTime());
@@ -139,25 +135,23 @@ public class Main implements TaskCallback, DatabaseCallback {
 	}
 	
 	/*
-	 * 무조건 새로 alloc이 아니라, 자기것부터 검사하고
-	 * 자기것을 못쓰면 alloc하는 방식으로 간다.
-	 * 물론 자기가 null을 가질 때는 그냥 alloc하는 것도 포함이다.
+	 * 초기 alloc 뿐만 아니라 change를 위해서도 쓰인다.
+	 * 특히 change일 때에는 미리 기존 account를 정리해줘야 한다.(free or unavailable)
 	 */
 	public boolean allocAccount(Task task) {
 		synchronized (task) {
-			if(task.getAccount() != null && task.getAccount().updateStatus() == Account.Status.WORKING) {
-				return true;
-			}
-			
 			for(Account account : accounts) {
-				synchronized (account) {// 한 acc가 여러 task에 가지 않도록 lock.
-					account.updateStatus();
-					
-					if(account.getStatus() == Account.Status.FREE) {
-						task.setAccount(account);
-						
-						return true;
+				account.updateStatus();
+				
+				if(account.getStatus() == Account.Status.FREE) {
+					if(task.getAccount() != null) {// 만약 기존에 account가 있었다면 미리 set callback null 및 update status 해준다.(어차피 unavailable이 될 것이긴 하지만)
+						task.getAccount().setCallback(null);
+						task.getAccount().updateStatus();
 					}
+					
+					task.setAccount(account);
+					
+					return true;
 				}
 			}
 			
@@ -165,167 +159,63 @@ public class Main implements TaskCallback, DatabaseCallback {
 		}
 	}
 	
-	public boolean allocSchedule(Task task) {
+	/*
+	 * working이 하나도 없이 전부 unavailable이라면 이 task는 종료되면 된다.(다른 task들도 종료될 것이다.)
+	 * working이 하나라도 있다면 이 task는 interrupt를 하거나 아니면 그냥 pause로 계속 loop를 돌면서 observer의 처리를 기다린다.
+	 */
+	public boolean scheduleTask(Task task) {
+		boolean done = true;
+		
 		for(Task task_ : tasks) {
-			try {
-			if(/*!task_.equals(task) && task_.getStatus() != Task.Status.DONE && */task_.getAccount().getInterruptable()) {// 여기서 sync 대기가 많이 난다.
-				synchronized (task_) {
-					if(task_.getStatus() == Task.Status.WORKING) {
-						task_.splitTask(task, true);
-					} else {
-						task_.splitTask(task, false);
-					}
+			synchronized (task_) {
+				if(task_.getStatus() == Task.Status.WORKING) {// unavailable은 task와 같은 처지로서 신경쓰지 않는다.(task 자신도 이미 unavailable이다.)
+					/*
+					 * working task가 있다는 자체로, interrupt 아니면 wait이니 아직 done될 때는 아니다.
+					 * 만약 중간에 working이 unavailable등으로 된다 하더라도 어차피 observer에서 다시 해결될 것이며
+					 * 사실상 monitor가 있기에 중간에 status change는 없을 것이다.
+					 */
+					done = false;
 					
-					return true;
-				}
-			}
-			} catch (Exception e) {
-				Logger.getInstance().printMessage("stop");
-			}
-		}
-		
-		return false;
-	}
-	
-	@Override
-	public void onTaskDone(Task task, List<MediaFeedData> list) {// 남의걸 갖고와서 자기가 나눠가진다.
-		writeListToDB(list);
-		
-		synchronized (task) {
-			processTaskProgress(task, task.getRange().getMinimum(), task.getRange().getMaximum());
-			
-			task.setRange(null);
-			
-			if(!allocSchedule(task)) {// 아무것도 할당 못했다 - 다 끝났다.
-				task.stopTask();
-			}// alloc schedule이 제대로 되었다면 나머지는 onsplit에서 다 처리될 것이다.
-		}
-	}
-
-	@Override
-	public void onTaskStop(Task task, List<MediaFeedData> list) {// 자기것을 다시 실행한다.
-		writeListToDB(list);
-		
-		synchronized (task) {
-			if(list != null && !list.isEmpty()) {
-				long last = extractId(list.get(list.size() - 1).getId());
-				
-				processTaskProgress(task, last, task.getRange().getMaximum());
-				
-				if(task.setRange(task.getRange().getMinimum(), last - 1)) {
-					if(!allocAccount(task)) {// account가 없다. - 그냥 기다린다.
-						task.pauseTask();
-					} else {
-						task.resumeTask();
-					}
-				} else {// stop도 done과 같은 stop이 있을 수 있다.
-					task.setRange(task.getRange().getMinimum(), task.getRange().getMaximum());
-					
-					if(!allocSchedule(task)) {// 아무것도 할당 못했다 - 다 끝났다.
-						task.stopTask();
-					} else {
-						if(!allocAccount(task)) {// account가 없다. - 그냥 기다린다.
-							task.pauseTask();
-						} else {
-							task.resumeTask();
-						}
-					}
-				}
-			} else {
-				processTaskProgress(task, 0);
-				
-				if(!allocAccount(task)) {// account가 없다. - 그냥 기다린다.
-					task.pauseTask();
-				} else {
-					task.resumeTask();
+					if(task_.isInterruptable()) {
+						task_.interruptTask(task);
+						
+						break;
+					} 
 				}
 			}
 		}
+		
+		return done;
 	}
 	
 	/*
-	 * 어느정도 구현은 되었는데
-	 * 아직 done 조건이 정확하지 않고,
-	 * negative integer 가능성 명확히 확인해야 하며
-	 * sync도 확인해야 되고
-	 * 전체 process 검증 및
-	 * 다시한번 code 최적화 한다.
+	 * 당장 판단을 할 수 없는 경우도 있다. 그럴 때는 pasue한다.(working인데 interruptable은 아닌 경우들이 있을 때.)
 	 */
-	
 	@Override
-	public void onTaskSplit(Task task, List<MediaFeedData> list, Task task_) {// 절반만 다시 실행한다.
-		writeListToDB(list);
-		
-		long last, min, pivot;
-		
-		synchronized (task) {
-			if(list != null && !list.isEmpty()) {
-				last = extractId(list.get(list.size() - 1).getId());
-			} else {
-				last = task.getRange().getMaximum() + 1;
-			}
-			
-			processTaskProgress(task, last, task.getRange().getMaximum());
-			
-			min = task.getRange().getMinimum();
-			pivot = (min + (last - 1)) / 2;
-			
-			// 거의 마지막이 되면 둘 중 한개는 먼저 stop(done)이 될 것이다.
-			if(task.setRange(min, pivot)) {
-				if(!allocAccount(task)) {// account가 없다. - 그냥 기다린다.
-					task.pauseTask();
-				} else {
-					task.resumeTask();
-				}
-			} else {
-				task.stopTask();
-			}
-		
-			synchronized (task_) {
-				if(task_.setRange(pivot + 1, last - 1)) {
-					if(!allocAccount(task_)) {// account가 없다. - 그냥 기다린다.
-						task_.pauseTask();
-					} else {
-						task_.resumeTask();
-					}
-				} else {
-					task_.stopTask();
-				}
-			}
-		}
+	public boolean onTaskFree(Task task) {// scheduling 성공여부를 return해서 .... 그런데 check는... range null, task status, interruptable 등이 있다. 적절히... 해보기.
+		return scheduleTask(task);
+	}
+
+	@Override
+	public boolean onTaskDischarged(Task task) {// account set 여부를 return해서 task의 status를 결정하게 해준다.
+		return allocAccount(task);// 원래는 좀 condition 넣어서 다르게 가려다가, 단순화를 위해 그냥 이렇게 가기로 했다.
+	}
+
+	@Override
+	public void onTaskTravelled(Task task, long visited) {
+		showTaskProgress(task, visited);
+	}
+
+	@Override
+	public void onTaskWritten(int written) {
+		showDatabaseProgress(written);
 	}
 
 	public long extractId(String string) {
 		return Long.valueOf(string.split("_")[0]);
 	}
 	
-	public void writeListToDB(List<MediaFeedData> list) {
-		if(list == null || list.isEmpty()) {
-			return;
-		}
-		
-		// 일단 1개로 진행해본다.
-		Database database = new Database(list, this);
-		
-		database.start();
-		
-		/*
-		 * 주기적 write가 아닌만큼 wait해도 무방하다 생각
-		 * 문제 있다면 없앤다.
-		 */
-		try {
-			database.join();
-		} catch (InterruptedException e) {
-			Logger.getInstance().printException(e);
-		}
-	}
-
-	/*
-	 * 정확한 시간 추정을 위해서는 그냥 탐색하는 범위들의 sum을 diff에 대한 %로 계산하는 것이 제일 낫다.
-	 * 물론 written도 별도로 표시할 수 있을 것이다.
-	 */
-	@Override
-	public synchronized void onDatabaseWritten(int written) {
+	public void showDatabaseProgress(int written) {
 		done += written;
 		
 		Logger.getInstance().printMessage("<Database> Written : %d / %d. %.2f%% done.", done, size, getDatabaseProgress());
@@ -442,11 +332,17 @@ public class Main implements TaskCallback, DatabaseCallback {
 								if(allocAccount(task)) {
 									task.startTask();
 								}
-							} else {
-								if(allocAccount(task)) {// 이미 pause, resize되어 있다. 할당해보고 되면 resume하고, 안되면 다시 pass.
-									task.resumeTask();
-								};
-							}// working일 경우는, 사실 exception이 났을 경운데, 그 경우는 처리되었을 것이라고 본다.
+							} else {//TODO: 충분히 LIMIT EXCEEDED이면서 RANGE NULL인 경우 있을 수 있다. 어떻게 처리할지 확실히 하기.
+								if(task.getRange() == null) {// 이건 split을 기다리는 것이다.
+									if(scheduleTask(task)) {
+										task.stopTask();
+									}
+								} else {
+									if(allocAccount(task)) {// 이미 pause, resize되어 있다. 할당해보고 되면 resume하고, 안되면 다시 pass.
+										task.resumeTask();
+									};
+								}
+							}
 						}
 					}
 				}

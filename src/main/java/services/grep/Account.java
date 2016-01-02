@@ -46,6 +46,10 @@ public class Account {
 	boolean interruptable = false;
 	boolean interrupted = false;
 	Task task;// for split
+	
+	private static final int LIMIT = 5000;
+	
+	AccountCallback callback;// 내용은 없지만, alloc의 증거로서 필요하다.(status로 만들수도 있었지만 이렇게 간다.)
 
 	public Account(String clientId, String clientSecret, String accessToken) {
 		this.clientId = clientId;
@@ -61,6 +65,14 @@ public class Account {
 		Token token = new Token(accessToken, clientSecret);
 		
 		instagram = new Instagram(token);
+	}
+	
+	public void setCallback(AccountCallback callback) {
+		this.callback = callback;
+	}
+	
+	public AccountCallback getCallback() {
+		return callback;
 	}
 	
 	public long getTagCount(String tag) {
@@ -126,8 +138,8 @@ public class Account {
 					
 		            while(true) {
 		            	if(!addFilteredData(result, nextData, from, to)) {// filter가 안되어야만 다음으로 넘어가고, 아니면 그냥 그대로 끝이다.
-		            		if(!interruptable) {
-		            			interruptable = true;
+		            		if(!interruptable && !interrupted) {// interrupt 될 때는 able도 false되기 때문에 그 조건은 피해야 한다.
+	            				interruptable = true;// 여기서 bound check 하려다가 너무 조건이 많아져서 뺐다.
 		            		}
 		            		
 		            		if(interrupted) {
@@ -147,9 +159,17 @@ public class Account {
 		            		break;
 		            	}
 		            }
+		            
+					if(interruptable) {// while을 벗어나기만 하면 바로 false해줘야 다른데서도 안걸리도 자기자신도 피해간다.
+						interruptable = false;
+					}
 				}
 			}
 		} catch (Exception e) {
+			if(interruptable) {// while을 벗어나기만 하면 바로 false해줘야 다른데서도 안걸리도 자기자신도 피해간다.
+				interruptable = false;
+			}
+			
 			if(e instanceof Result) {
 				throw e;
 			} else if (e instanceof InstagramException){
@@ -182,7 +202,7 @@ public class Account {
 	public void interrupt(Task task) {
 		this.task = task;
 		
-		interruptable = false;// interrupt하면서 monitor 유지한 상태로 off해야 다른 task한테 또 잡혀가지 않는다.
+		interruptable = false;// 여기까지는 monitor가 붙어있으므로 여기서 interruptable off해야 sync 효과 먹힌다.
 		interrupted = true;
 	}
 	
@@ -243,22 +263,27 @@ public class Account {
 		return remaining;
 	}
 	
-	public Status updateStatus() {//TODO: SYNC 해야 되는 것 아닌지.
+	/* 
+	 * 정의를 확실히 한다.
+	 * 할당되면 limit/2 over든 under든 무조건 working이다.
+	 * 할당안되었을 때 over면 free, under면 unavailable이다.
+	 */
+	public void updateStatus() {
+		if(callback != null) {// 할당된 상태면 필요없는데, 밖에서보다 여기서 그냥 skip해준다.
+			return;
+		}
+		
 		int remaining = getRateRemaining();
 		
 		if(remaining != -1) {
-			if(remaining < 5000 / 2) {
-				status = Status.UNAVAILABLE;// 잘 되던 task가 stop되었다가 여기에서 잠시 pause되어있을 수도 있을 것이다.
+			if(remaining < LIMIT / 2) {
+				status = Status.UNAVAILABLE;
 			} else {
-				if(status == Status.UNAVAILABLE) {
-					status = Status.FREE;
-				}// 나머지는 working, free 그대로 두면 된다.
+				status = Status.FREE;
 			}
-		} else {
+		} else {// 사실 꼭 이게 exceeded 아닐수도 있지만, 그냥 그렇게 간다.
 			status = Status.UNAVAILABLE;
 		}
-		
-		return status;
 	}
 	
 	public void setStatus(Status status) {
@@ -275,6 +300,9 @@ public class Account {
 	
 	public int getAccountId() {
 		return id;
+	}
+	
+	public interface AccountCallback {
 	}
 	
 }
