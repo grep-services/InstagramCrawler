@@ -90,7 +90,7 @@ public class Task extends Thread implements AccountCallback, DatabaseCallback {
 	public void run() {
 		while(status != Status.DONE) {
 			while(status == Status.WORKING) {// account, range 등이 exception 등에 의해 변경될 수 있다. 그 때 다시 working으로 돌리면서 진입한다.
-				//TODO: filtering하다가 exception 난 것까지는 어떻게 할 수가 없다. 그것은 그냥 crawling 몇 번 한 평균으로서 그냥 보증한다.
+				//TODO: filtering하다가 exception 난 것(정보의 소실)까지는 어떻게 할 수가 없다. 그것은 그냥 crawling 몇 번 한 평균으로서 그냥 보증한다.
 				List<MediaFeedData> list;
 				
 				try {// 정상적일 때 - 일단 break 상태에서, 다른 task split한다.
@@ -103,7 +103,7 @@ public class Task extends Thread implements AccountCallback, DatabaseCallback {
 					pauseTask();// 미리 break되도록 해놓으면 아래 method에서 status가 바로 바뀌든 나중에 바뀌든 문제없이 돌아갈 것이다.
 					
 					if(callback.onTaskFree(this)) {// task를 다 가지고 있는 main에서 처리할 수 있기 때문에 callback해야 한다.
-						stopTask();// 이것이 실행된다는 말은 callback 내부에서의 interrupt는 없다는 것을 보증한다.
+						stopTask();
 					}// else의 경우는 그냥 callback의 실행 내용에 따르며 range, status 등도 알아서 결정될 것이다.
 				} catch (Exception e) {
 					Result result = (Result) e;
@@ -114,22 +114,35 @@ public class Task extends Thread implements AccountCallback, DatabaseCallback {
 					
 					setRange(range.getMinimum(), (list != null && !list.isEmpty()) ? extractId(list.get(list.size() - 1).getId()) - 1 : range.getMaximum());
 					
-					Task task = result.getTask();// 필요하다면 this를 split해서 task에게 나눠줄 것이다.
-					
-					if(result.getStatus() == Result.Status.NORMAL) {// 일반적인 exception - split 있을 때만 하면 된다.(없을 때는 위에서 이미 range set)
-						if(task != null) {
-							splitTask(this, task);
-						}
-					} else if(result.getStatus() == Result.Status.LIMIT) {// limit exceeded - account change. 안되면 break. split 유무 check 필요.
-						if(!callback.onTaskDischarged(this)) {// split에 상관없이 change가 실패하면 break 예약해둔다.
-							pauseTask();//TODO: 이부분도 LIMIT와 RANGE NULL이 동시에 일어나는 경우(OBSERVER에서처럼)에 대해 다루어야 한다. 안그럼 여기서부터 바로 ACCOUNT NPE 날 것이다.
-						}// else는 그냥 놔두면 된다.
+					/*
+					 * range가 null이라면 exception이 무엇이든 무시하고 그냥 위의 것처럼 처리한다.
+					 * 여기서도 observer에서처럼 limit와 겹칠수도 있지만
+					 * 마찬가지로 scheduling되고 나서 어차피 limit가 여전히 문제라면 거기서 exception에 걸려서 처리될 것이므로 문제없다.
+					 */
+					if(range == null) { 
+						pauseTask();// 이것도 역시 미리 break해둔다.
 						
-						if(task != null) {
+						if(callback.onTaskFree(this)) {
+							stopTask();
+						}
+					} else {// 일반적인 exception 처리. element가 단 1개라도 있다는 이야기도 된다.
+						Task task = result.getTask();// 필요하다면 this를 split해서 task에게 나눠줄 것이다.
+						
+						if(result.getStatus() == Result.Status.NORMAL) {// 일반적인 exception - split 있을 때만 하면 된다.(없을 때는 위에서 이미 range set)
+							if(task != null) {
+								splitTask(this, task);
+							}
+						} else if(result.getStatus() == Result.Status.LIMIT) {// limit exceeded - account change. 안되면 break. split 유무 check 필요.
+							if(!callback.onTaskDischarged(this)) {// split에 상관없이 change가 실패하면 break 예약해둔다.
+								pauseTask();
+							}// else는 그냥 놔두면 된다.
+							
+							if(task != null) {
+								splitTask(this, task);
+							}
+						} else {// split - 그냥 하면 된다.
 							splitTask(this, task);
 						}
-					} else {// split - 그냥 하면 된다.
-						splitTask(this, task);
 					}
 				}
 			}
@@ -151,27 +164,24 @@ public class Task extends Thread implements AccountCallback, DatabaseCallback {
 	
 	/*
 	 * limit, normal, split 등 어디에서도 interrupted되어서 온 것에게 통일적으로 완벽한 split을 해주기 위한 내부 method.
-	 * task를 쪼개서 task_에게 준다. 만약 쪼갤 것이 없으면 task혼자 처리하고 task_는 그냥 pause로 놔둔다.
+	 * task range not null이므로 task를 쪼개서 task_에게 준다.
 	 * 쪼개서 나눴을 때는, task는 물론 working status에서 온 것이지만 task_는 unavailable status일 수가 있는 만큼 resume을 시켜준다.
-	 * 그리고 이전에 task 자체마저도 처리할 것이 없으면 free callback 한다.
+	 * task는 monitor 계속 유지되는 것은 아니지만 그 안에서 interruptable이 처리되므로 결국 lock 적용된다고 보아서 sync 필요없다고 생각했고,
+	 * task_는 range null callback되는 것도 결국 단일 call이 되기 때문에 interruptable에 문제가 안생기고 sync 필요없다고 판단했다. 
 	 */
-	private void splitTask(Task task, Task task_) {//TODO: 잘 판단해서 SYNC 하기. 일단 sync할 필요 없을 것 같아서 안했다.
-		if(task.getRange() == null) {// split도 꼭 while에서 되었을 것이란 보장은 없기에 충분히 range null은 가능하다.
-			task.pauseTask();
+	private void splitTask(Task task, Task task_) {// 일단 sync할 필요 없을 것 같아서 안했다.
+		long size = task.getRange().getMaximum() - task.getRange().getMinimum();
+		
+		if(size > BOUND) {
+			Logger.getInstance().printMessage("<Task %d> Split and share with Task %d.", id, task_.getId());
 			
-			callback.onTaskFree(task);
-		} else {
-			long size = task.getRange().getMaximum() - task.getRange().getMinimum();
+			long pivot = size / 2;
 			
-			if(size > BOUND) {
-				long pivot = size / 2;
-				
-				task.setRange(task.getRange().getMinimum(), task.getRange().getMinimum() + pivot);
-				
-				task_.setRange(pivot + 1, task.getRange().getMaximum());// size >= 1 만 되어도 이 range는 최소 size 1이 되어서 문제없다.
-				task_.resumeTask();
-			}// bound보다 작은 것에 대해서는, task가 그대로 떠맡을 것이고, task_는 그대로 unavailable을 유지할 것이다.
-		}
+			task.setRange(task.getRange().getMinimum(), task.getRange().getMinimum() + pivot);
+			
+			task_.setRange(pivot + 1, task.getRange().getMaximum());// size >= 1 만 되어도 이 range는 최소 size 1이 되어서 문제없다.
+			task_.resumeTask();
+		}// bound보다 작은 것에 대해서는, task가 그대로 떠맡을 것이고, task_는 그대로 unavailable을 유지할 것이다.
 	}
 	
 	public void startTask() {
@@ -217,6 +227,12 @@ public class Task extends Thread implements AccountCallback, DatabaseCallback {
 	}
 	
 	public boolean setRange(long from, long to) {// to가 from 미만으로 갈 수도 있는 점을 boolean으로 정리한다.
+		long visited;
+		
+		//TODO: 모든 RANGE 변화를 기록해서 CALLBACK에 전달해주는 것 또한 매우 중요하다.
+		
+		callback.onTaskTravelled(this, visited);
+		
 		if(from <= to) {
 			setRange(Range.between(from, to));
 		} else {

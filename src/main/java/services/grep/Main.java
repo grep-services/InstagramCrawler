@@ -193,11 +193,15 @@ public class Main implements TaskCallback {
 	 */
 	@Override
 	public boolean onTaskFree(Task task) {// scheduling 성공여부를 return해서 .... 그런데 check는... range null, task status, interruptable 등이 있다. 적절히... 해보기.
+		Logger.getInstance().printMessage("<Task %d> Free.", task.getId());
+		
 		return scheduleTask(task);
 	}
 
 	@Override
 	public boolean onTaskDischarged(Task task) {// account set 여부를 return해서 task의 status를 결정하게 해준다.
+		Logger.getInstance().printMessage("<Task %d> Discharged.", task.getId());
+		
 		return allocAccount(task);// 원래는 좀 condition 넣어서 다르게 가려다가, 단순화를 위해 그냥 이렇게 가기로 했다.
 	}
 
@@ -209,10 +213,6 @@ public class Main implements TaskCallback {
 	@Override
 	public void onTaskWritten(int written) {
 		showDatabaseProgress(written);
-	}
-
-	public long extractId(String string) {
-		return Long.valueOf(string.split("_")[0]);
 	}
 	
 	public void showDatabaseProgress(int written) {
@@ -332,8 +332,13 @@ public class Main implements TaskCallback {
 								if(allocAccount(task)) {
 									task.startTask();
 								}
-							} else {//TODO: 충분히 LIMIT EXCEEDED이면서 RANGE NULL인 경우 있을 수 있다. 어떻게 처리할지 확실히 하기.
-								if(task.getRange() == null) {// 이건 split을 기다리는 것이다.
+							} else {
+								/*
+								 * 아래의 if는 split을 기다리는 것이고, else는 alloc을 기다리는 것이다.
+								 * split을 기다리는 것 또한 alloc이 필요할 수는 있다.
+								 * 다만 굳이 account update를 다시 하지 않아도, 어차피 rescheduled 이후의 account cycle에서 알아서 다시 limit exception 나든 될 것이다.
+								 */
+								if(task.getRange() == null) {
 									if(scheduleTask(task)) {
 										task.stopTask();
 									}
@@ -347,14 +352,14 @@ public class Main implements TaskCallback {
 					}
 				}
 				
+				if(isAllTasksCompleted()) {
+					break;
+				}
+				
 				try {
 					Thread.sleep(PERIOD);
 				} catch(InterruptedException e) {
 					Logger.getInstance().printException(e);
-				}
-				
-				if(isAllTasksCompleted()) {
-					break;
 				}
 			}
 		}
