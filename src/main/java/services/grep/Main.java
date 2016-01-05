@@ -28,7 +28,7 @@ import org.jinstagram.entity.users.feed.MediaFeedData;
 
 public class Main implements TaskCallback {
 
-	final String tag = "ㅂㅈ";
+	final String tag = "먹스타그램";
 	
 	List<Account> accounts;
 	List<Task> tasks;
@@ -231,7 +231,7 @@ public class Main implements TaskCallback {
 		observer.start();
 		
 		try {
-			observer.join();//TODO: 나중에는 task들마다 join 달아서 observer와 상관없이 바로 끝낼 수 있도록(물론 observer도 종료되게) 해본다.
+			observer.join();
 		} catch (InterruptedException e) {
 			Logger.getInstance().printException(e);
 		}

@@ -98,6 +98,8 @@ public class Task extends Thread implements AccountCallback, DatabaseCallback {
 					
 					writeListToDB(list);// 일단 db write부터.
 					
+					callback.onTaskTravelled(this, range.getMaximum() - range.getMinimum() + 1);
+					
 					setRange(null);// 0으로 resize도 해준다.(사실 상징적인 의미)
 					
 					pauseTask();// 미리 break되도록 해놓으면 아래 method에서 status가 바로 바뀌든 나중에 바뀌든 문제없이 돌아갈 것이다.
@@ -111,6 +113,9 @@ public class Task extends Thread implements AccountCallback, DatabaseCallback {
 					list = result.getResult();
 					
 					writeListToDB(list);// 일단 db write부터.
+					
+					// 받은 만큼만 세어주는데, null이면 당연히 0개이다.(다시 그대로 재시작)
+					callback.onTaskTravelled(this, (list != null && !list.isEmpty()) ? range.getMaximum() - extractId(list.get(list.size() - 1).getId()) + 1 : 0);
 					
 					setRange(range.getMinimum(), (list != null && !list.isEmpty()) ? extractId(list.get(list.size() - 1).getId()) - 1 : range.getMaximum());
 					
@@ -226,13 +231,11 @@ public class Task extends Thread implements AccountCallback, DatabaseCallback {
 		this.range = range;
 	}
 	
-	public boolean setRange(long from, long to) {// to가 from 미만으로 갈 수도 있는 점을 boolean으로 정리한다.
-		long visited;
-		
-		//TODO: 모든 RANGE 변화를 기록해서 CALLBACK에 전달해주는 것 또한 매우 중요하다.
-		
-		callback.onTaskTravelled(this, visited);
-		
+	/*
+	 * to가 from 미만으로 갈 수도 있는 점을 boolean으로 정리한다.
+	 * split 등등 여기서 모든 travel callback을 하지 못하는 이유가 있다. 그냥 꼼꼼히 직접 다 해준다.
+	 */
+	public boolean setRange(long from, long to) {
 		if(from <= to) {
 			setRange(Range.between(from, to));
 		} else {
