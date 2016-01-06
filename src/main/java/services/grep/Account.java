@@ -40,8 +40,7 @@ public class Account {
 	
 	Instagram instagram;
 	
-	//private static final int query_batch = 1000;
-	//private static final int database_batch = 10000;
+	private static final int BATCH = 10000;// 1개가 0.1KB정도라고 쳤을 때 1MB 정도가 되며, 30개의 acc면 30m 정도이다. 10만개 단위는 좀 많다.
 	
 	boolean interruptable = false;
 	boolean interrupted = false;
@@ -146,6 +145,10 @@ public class Account {
 		            			interrupted = false;
 		            			
 		            			throw new Result(Result.Status.SPLIT, result, task);
+		            		}
+		            		
+		            		if(result != null && result.size() > BATCH) {
+		            			throw new Exception();
 		            		}
 		            		
 			    			if(nextPage.hasNextPage()) {

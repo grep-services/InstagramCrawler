@@ -7,11 +7,9 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
-import main.java.services.grep.Database.DatabaseCallback;
-import main.java.services.grep.Task.TaskCallback;
-
 import org.apache.commons.lang3.Range;
-import org.jinstagram.entity.users.feed.MediaFeedData;
+
+import main.java.services.grep.Task.TaskCallback;
 
 /**
  * 
@@ -28,7 +26,7 @@ import org.jinstagram.entity.users.feed.MediaFeedData;
 
 public class Main implements TaskCallback {
 
-	final String tag = "먹스타그램";
+	final String tag = "허니버터칩";
 	
 	List<Account> accounts;
 	List<Task> tasks;
@@ -193,14 +191,14 @@ public class Main implements TaskCallback {
 	 */
 	@Override
 	public boolean onTaskFree(Task task) {// scheduling 성공여부를 return해서 .... 그런데 check는... range null, task status, interruptable 등이 있다. 적절히... 해보기.
-		Logger.getInstance().printMessage("<Task %d> Free.", task.getId());
+		Logger.getInstance().printMessage("<Task %d> Free.", task.getTaskId());
 		
 		return scheduleTask(task);
 	}
 
 	@Override
 	public boolean onTaskDischarged(Task task) {// account set 여부를 return해서 task의 status를 결정하게 해준다.
-		Logger.getInstance().printMessage("<Task %d> Discharged.", task.getId());
+		Logger.getInstance().printMessage("<Task %d> Discharged.", task.getTaskId());
 		
 		return allocAccount(task);// 원래는 좀 condition 넣어서 다르게 가려다가, 단순화를 위해 그냥 이렇게 가기로 했다.
 	}
@@ -315,6 +313,7 @@ public class Main implements TaskCallback {
 	class Observer extends Thread {
 		
 		final long PERIOD = 5 * 60 * 1000;// 5분
+		StringBuilder message;
 		
 		public Observer() {
 			setDaemon(true);
@@ -325,8 +324,11 @@ public class Main implements TaskCallback {
 			start = System.currentTimeMillis();
 			
 			while(true) {
+				message = new StringBuilder("<Task> Status : ");
+				
 				for(Task task : tasks) {
 					synchronized (task) {// task done 동시 체크까지 다 sync 잡을순 없어도 여기선 sync해줘야 한다.
+						message.append(String.format("[T%d%s-%d, %s]", task.getTaskId(), task.getStatus().getNick(), task.getRange() != null ? task.getRange().getMaximum() - task.getRange().getMinimum() : 0, task.getAccount() != null ? (task.isInterruptable() ? "I" : "NI") : "NI"));
 						if(task.getStatus() == Task.Status.UNAVAILABLE) {
 							if(task.getAccount() == null) {// 원래 초기화는 밖에서 하려 했으나, 이것도 마찬가지로 한번에 안될 수 있으므로 여기서 했다.
 								if(allocAccount(task)) {
@@ -351,6 +353,8 @@ public class Main implements TaskCallback {
 						}
 					}
 				}
+				
+				Logger.getInstance().printMessage(message.toString());
 				
 				if(isAllTasksCompleted()) {
 					break;

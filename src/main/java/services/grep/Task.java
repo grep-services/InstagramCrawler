@@ -23,7 +23,17 @@ import org.jinstagram.entity.users.feed.MediaFeedData;
 public class Task extends Thread implements AccountCallback, DatabaseCallback {
 
 	public enum Status {// 단순히 boolean으로는 정확히 다룰 수가 없고, 그러면 꼬일 수가 있어서 이렇게 간다.
-		UNAVAILABLE, WORKING, DONE;
+		UNAVAILABLE("U"), WORKING("W"), DONE("D");
+		
+		private String nick;
+		
+		Status(String nick) {
+			this.nick = nick;
+		}
+		
+		public String getNick() {
+			return nick;
+		}
 	}
 	public Status status;
 	
@@ -178,7 +188,7 @@ public class Task extends Thread implements AccountCallback, DatabaseCallback {
 		long size = task.getRange().getMaximum() - task.getRange().getMinimum();
 		
 		if(size > BOUND) {
-			Logger.getInstance().printMessage("<Task %d> Split and share with Task %d.", id, task_.getId());
+			Logger.getInstance().printMessage("<Task %d> Split and share with Task %d.", id, task_.getTaskId());
 			
 			long pivot = size / 2;
 			

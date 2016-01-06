@@ -33,7 +33,6 @@ public class Database extends Thread {
 	private Statement statement = null;
 	private String sql = "Insert into \"Instagram\" (media_id, created_time, link_url, image_url, likes_count, text, comments_count, user_id, user_name, location_name, latitude, longitude) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 	private PreparedStatement preparedStatement = null;
-	//private static final int batch = 1000;
 	
 	private List<MediaFeedData> list = null;
 	
