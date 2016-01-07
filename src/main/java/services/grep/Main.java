@@ -7,9 +7,9 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.apache.commons.lang3.Range;
-
 import main.java.services.grep.Task.TaskCallback;
+
+import org.apache.commons.lang3.Range;
 
 /**
  * 
@@ -26,7 +26,7 @@ import main.java.services.grep.Task.TaskCallback;
 
 public class Main implements TaskCallback {
 
-	final String tag = "허니버터칩";
+	final String tag = "허니버터";
 	
 	List<Account> accounts;
 	List<Task> tasks;
