@@ -190,11 +190,12 @@ public class Task extends Thread implements AccountCallback, DatabaseCallback {
 		if(size > BOUND) {
 			Logger.getInstance().printMessage("<Task %d> Split and share with Task %d.", id, task_.getTaskId());
 			
+			long max = task.getRange().getMaximum(), min = task.getRange().getMinimum();// 미리 해놔야 밑에서 안 꼬인다.
 			long pivot = size / 2;
 			
-			task.setRange(task.getRange().getMinimum(), task.getRange().getMinimum() + pivot);
+			task.setRange(min, min + pivot);// 여기서 먼저 set 된 것이 밑에 이용되어서 꼬였었다.
 			
-			task_.setRange(task.getRange().getMinimum() + pivot + 1, task.getRange().getMaximum());// size >= 1 만 되어도 이 range는 최소 size 1이 되어서 문제없다.
+			task_.setRange(min + pivot + 1, max);// size >= 1 만 되어도 이 range는 최소 size 1이 되어서 문제없다.
 			task_.resumeTask();
 		}// bound보다 작은 것에 대해서는, task가 그대로 떠맡을 것이고, task_는 그대로 unavailable을 유지할 것이다.
 	}
