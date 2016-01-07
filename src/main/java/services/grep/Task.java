@@ -194,7 +194,7 @@ public class Task extends Thread implements AccountCallback, DatabaseCallback {
 			
 			task.setRange(task.getRange().getMinimum(), task.getRange().getMinimum() + pivot);
 			
-			task_.setRange(pivot + 1, task.getRange().getMaximum());// size >= 1 만 되어도 이 range는 최소 size 1이 되어서 문제없다.
+			task_.setRange(task.getRange().getMinimum() + pivot + 1, task.getRange().getMaximum());// size >= 1 만 되어도 이 range는 최소 size 1이 되어서 문제없다.
 			task_.resumeTask();
 		}// bound보다 작은 것에 대해서는, task가 그대로 떠맡을 것이고, task_는 그대로 unavailable을 유지할 것이다.
 	}
