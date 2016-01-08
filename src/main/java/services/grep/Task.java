@@ -99,6 +99,7 @@ public class Task extends Thread implements AccountCallback, DatabaseCallback {
 	@Override
 	public void run() {
 		while(status != Status.DONE) {
+			Logger.getInstance().printMessage("<Task %d> Breaked.", id);
 			while(status == Status.WORKING) {// account, range 등이 exception 등에 의해 변경될 수 있다. 그 때 다시 working으로 돌리면서 진입한다.
 				//TODO: filtering하다가 exception 난 것(정보의 소실)까지는 어떻게 할 수가 없다. 그것은 그냥 crawling 몇 번 한 평균으로서 그냥 보증한다.
 				List<MediaFeedData> list;
@@ -145,7 +146,7 @@ public class Task extends Thread implements AccountCallback, DatabaseCallback {
 						
 						if(result.getStatus() == Result.Status.NORMAL) {// 일반적인 exception - split 있을 때만 하면 된다.(없을 때는 위에서 이미 range set)
 							if(task != null) {
-								splitTask(this, task);
+								splitTask(task);
 							}
 						} else if(result.getStatus() == Result.Status.LIMIT) {// limit exceeded - account change. 안되면 break. split 유무 check 필요.
 							if(!callback.onTaskDischarged(this)) {// split에 상관없이 change가 실패하면 break 예약해둔다.
@@ -153,10 +154,10 @@ public class Task extends Thread implements AccountCallback, DatabaseCallback {
 							}// else는 그냥 놔두면 된다.
 							
 							if(task != null) {
-								splitTask(this, task);
+								splitTask(task);
 							}
 						} else {// split - 그냥 하면 된다.
-							splitTask(this, task);
+							splitTask(task);
 						}
 					}
 				}
@@ -169,8 +170,8 @@ public class Task extends Thread implements AccountCallback, DatabaseCallback {
 	}
 	
 	// this를 interrupt해서 task_도 나눠 받아라는 method.
-	public void interruptTask(Task task_) {
-		account.interrupt(task_);// account break한 다음에 exception을 통해 this의 while로 넘어오려는 계획.
+	public void interruptTask(Task task) {
+		account.interrupt(task);// account break한 다음에 exception을 통해 this의 while로 넘어오려는 계획.
 	}
 	
 	public boolean isInterruptable() {
@@ -179,24 +180,26 @@ public class Task extends Thread implements AccountCallback, DatabaseCallback {
 	
 	/*
 	 * limit, normal, split 등 어디에서도 interrupted되어서 온 것에게 통일적으로 완벽한 split을 해주기 위한 내부 method.
-	 * task range not null이므로 task를 쪼개서 task_에게 준다.
-	 * 쪼개서 나눴을 때는, task는 물론 working status에서 온 것이지만 task_는 unavailable status일 수가 있는 만큼 resume을 시켜준다.
-	 * task는 monitor 계속 유지되는 것은 아니지만 그 안에서 interruptable이 처리되므로 결국 lock 적용된다고 보아서 sync 필요없다고 생각했고,
-	 * task_는 range null callback되는 것도 결국 단일 call이 되기 때문에 interruptable에 문제가 안생기고 sync 필요없다고 판단했다. 
+	 * range not null이므로 쪼개서 task에게 준다.
+	 * 쪼개서 나눴을 때는, this는 물론 working status에서 온 것이지만 task는 unavailable status일 수가 있는 만큼 resume을 시켜준다.
+	 * this는 monitor 계속 유지되는 것은 아니지만 그 안에서 interruptable이 처리되므로 결국 lock 적용된다고 보아서 sync 필요없다고 생각했고,
+	 * task는 range null callback되는 것도 결국 단일 call이 되기 때문에 interruptable에 문제가 안생기고 sync 필요없다고 판단했다. 
 	 */
-	private void splitTask(Task task, Task task_) {// 일단 sync할 필요 없을 것 같아서 안했다.
-		long size = task.getRange().getMaximum() - task.getRange().getMinimum();
+	private void splitTask(Task task) {// 일단 sync할 필요 없을 것 같아서 안했다.
+		long size = range.getMaximum() - range.getMinimum();
 		
 		if(size > BOUND) {
-			Logger.getInstance().printMessage("<Task %d> Split and share with Task %d.", id, task_.getTaskId());
+			Logger.getInstance().printMessage("<Task %d> Split and share with Task %d.", id, task.getTaskId());
 			
-			long max = task.getRange().getMaximum(), min = task.getRange().getMinimum();// 미리 해놔야 밑에서 안 꼬인다.
+			long max = range.getMaximum(), min = range.getMinimum();// 미리 해놔야 밑에서 안 꼬인다.
 			long pivot = size / 2;
 			
-			task.setRange(min, min + pivot);// 여기서 먼저 set 된 것이 밑에 이용되어서 꼬였었다.
+			setRange(min, min + pivot);// 여기서 먼저 set 된 것이 밑에 이용되어서 꼬였었다.
 			
-			task_.setRange(min + pivot + 1, max);// size >= 1 만 되어도 이 range는 최소 size 1이 되어서 문제없다.
-			task_.resumeTask();
+			synchronized (task) {
+				task.setRange(min + pivot + 1, max);// size >= 1 만 되어도 이 range는 최소 size 1이 되어서 문제없다.
+				task.resumeTask();
+			}
 		}// bound보다 작은 것에 대해서는, task가 그대로 떠맡을 것이고, task_는 그대로 unavailable을 유지할 것이다.
 	}
 	
@@ -226,6 +229,10 @@ public class Task extends Thread implements AccountCallback, DatabaseCallback {
 	
 	public void resumeTask() {
 		Logger.getInstance().printMessage("<Task %d> Resumed.", id);
+		
+		if(id == 0) {
+			Logger.getInstance().printMessage("RESUMED");
+		}
 		
 		status = Status.WORKING;
 	}

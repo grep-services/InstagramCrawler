@@ -121,6 +121,8 @@ public class Account {
 	 * 2차 exception은 애초에 여기서 바로 다시 시도하는 것이 아니기 때문에 고려할 필요 없다.
 	 */
 	public List<MediaFeedData> getListFromTag(String tag, long from, long to) throws Exception {
+		Logger.getInstance().printMessage("<Account %d> getList", id);
+		
 		List<MediaFeedData> result = new ArrayList<MediaFeedData>();// 값 유지를 위해 공간은 만들어두어야 한다.
 		
 		try {

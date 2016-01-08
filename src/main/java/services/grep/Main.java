@@ -312,7 +312,7 @@ public class Main implements TaskCallback {
 	
 	class Observer extends Thread {
 		
-		final long PERIOD = 5 * 60 * 1000;// 5분
+		final long PERIOD = 1 * 60 * 1000 / 2;// 5분
 		StringBuilder message;
 		
 		public Observer() {

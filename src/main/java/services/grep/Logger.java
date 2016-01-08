@@ -80,7 +80,7 @@ public class Logger {
 				try {
 					writer.write(string + '\n');
 				} catch (IOException e1) {
-					System.out.println("Message : " + e1.getMessage());// prevent recursive
+					System.out.println("Exception : " + e1.getMessage());// prevent recursive
 				}
 			}
 		}
