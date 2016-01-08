@@ -1,0 +1,260 @@
+Message : <Task 0> Created : 0 to 38575815924216090. diff is 38575815924216090.
+Message : <Task 1> Created : 38575815924216091 to 77151631848432181. diff is 38575815924216090.
+Message : <Task 2> Created : 77151631848432182 to 115727447772648272. diff is 38575815924216090.
+Message : <Task 3> Created : 115727447772648273 to 154303263696864363. diff is 38575815924216090.
+Message : <Task 4> Created : 154303263696864364 to 192879079621080454. diff is 38575815924216090.
+Message : <Task 5> Created : 192879079621080455 to 231454895545296545. diff is 38575815924216090.
+Message : <Task 6> Created : 231454895545296546 to 270030711469512636. diff is 38575815924216090.
+Message : <Task 7> Created : 270030711469512637 to 308606527393728727. diff is 38575815924216090.
+Message : <Task 8> Created : 308606527393728728 to 347182343317944818. diff is 38575815924216090.
+Message : <Task 9> Created : 347182343317944819 to 385758159242160909. diff is 38575815924216090.
+Message : <Task 10> Created : 385758159242160910 to 424333975166377000. diff is 38575815924216090.
+Message : <Task 11> Created : 424333975166377001 to 462909791090593091. diff is 38575815924216090.
+Message : <Task 12> Created : 462909791090593092 to 501485607014809182. diff is 38575815924216090.
+Message : <Task 13> Created : 501485607014809183 to 540061422939025273. diff is 38575815924216090.
+Message : <Task 14> Created : 540061422939025274 to 578637238863241364. diff is 38575815924216090.
+Message : <Task 15> Created : 578637238863241365 to 617213054787457455. diff is 38575815924216090.
+Message : <Task 16> Created : 617213054787457456 to 655788870711673546. diff is 38575815924216090.
+Message : <Task 17> Created : 655788870711673547 to 694364686635889637. diff is 38575815924216090.
+Message : <Task 18> Created : 694364686635889638 to 732940502560105728. diff is 38575815924216090.
+Message : <Task 19> Created : 732940502560105729 to 771516318484321819. diff is 38575815924216090.
+Message : <Task 20> Created : 771516318484321820 to 810092134408537910. diff is 38575815924216090.
+Message : <Task 21> Created : 810092134408537911 to 848667950332754001. diff is 38575815924216090.
+Message : <Task 22> Created : 848667950332754002 to 887243766256970092. diff is 38575815924216090.
+Message : <Task 23> Created : 887243766256970093 to 925819582181186183. diff is 38575815924216090.
+Message : <Task 24> Created : 925819582181186184 to 964395398105402274. diff is 38575815924216090.
+Message : <Task 25> Created : 964395398105402275 to 1002971214029618365. diff is 38575815924216090.
+Message : <Task 26> Created : 1002971214029618366 to 1041547029953834456. diff is 38575815924216090.
+Message : <Task 27> Created : 1041547029953834457 to 1080122845878050547. diff is 38575815924216090.
+Message : <Task 28> Created : 1080122845878050548 to 1118698661802266638. diff is 38575815924216090.
+Message : <Task 29> Created : 1118698661802266639 to 1157274477726482751. diff is 38575815924216112.
+Message : <Task 0> Started.
+Message : <Task 1> Started.
+Message : <Database> Written : 1 / 44208. 0.00% done.
+Message : <Task 0> Travelled : 38575815924216091 / 1157274477726482752. 3.33% done in PT0.848S and PT24.621S remains.
+Message : <Task 0> Paused.
+Message : <Task 0> Free.
+Message : <Task 2> Started.
+Message : <Task 1> Travelled : 77151631848432182 / 1157274477726482752. 6.67% done in PT1.048S and PT14.672S remains.
+Message : <Task 1> Paused.
+Message : <Task 1> Free.
+Message : <Task 2> Travelled : 115727447772648273 / 1157274477726482752. 10.00% done in PT1.29S and PT11.61S remains.
+Message : <Task 2> Paused.
+Message : <Task 2> Free.
+Message : <Task 3> Started.
+Message : <Task 3> Travelled : 154303263696864364 / 1157274477726482752. 13.33% done in PT1.75S and PT11.375S remains.
+Message : <Task 3> Paused.
+Message : <Task 3> Free.
+Message : <Task 4> Started.
+Message : <Task 5> Started.
+Message : <Task 4> Travelled : 192879079621080455 / 1157274477726482752. 16.67% done in PT1.999S and PT9.995S remains.
+Message : <Task 4> Paused.
+Message : <Task 4> Free.
+Message : <Task 6> Started.
+Message : <Task 5> Travelled : 231454895545296546 / 1157274477726482752. 20.00% done in PT2.252S and PT9.008S remains.
+Message : <Task 5> Paused.
+Message : <Task 5> Free.
+Message : <Task 7> Started.
+Message : <Task 7> Travelled : 270030711469512637 / 1157274477726482752. 23.33% done in PT2.806S and PT9.219S remains.
+Message : <Task 7> Paused.
+Message : <Task 7> Free.
+Message : <Task 8> Started.
+Message : <Task 6> Travelled : 308606527393728728 / 1157274477726482752. 26.67% done in PT2.862S and PT7.87S remains.
+Message : <Task 6> Paused.
+Message : <Task 6> Free.
+Message : <Task 8> Travelled : 347182343317944819 / 1157274477726482752. 30.00% done in PT3.129S and PT7.3S remains.
+Message : <Task 8> Paused.
+Message : <Task 8> Free.
+Message : <Task 9> Started.
+Message : <Task 10> Started.
+Message : <Task 9> Travelled : 385758159242160910 / 1157274477726482752. 33.33% done in PT3.498S and PT6.996S remains.
+Message : <Task 9> Paused.
+Message : <Task 9> Free.
+Message : <Task 11> Started.
+Message : <Database> Written : 3 / 44208. 0.01% done.
+Message : <Task 10> Travelled : 424333975166377001 / 1157274477726482752. 36.67% done in PT3.804S and PT6.57S remains.
+Message : <Task 10> Paused.
+Message : <Task 10> Free.
+Message : <Task 11> Travelled : 462909791090593092 / 1157274477726482752. 40.00% done in PT4.087S and PT6.13S remains.
+Message : <Task 11> Paused.
+Message : <Task 11> Free.
+Message : <Task 12> Started.
+Message : <Task 12> Travelled : 501485607014809183 / 1157274477726482752. 43.33% done in PT4.413S and PT5.77S remains.
+Message : <Task 12> Paused.
+Message : <Task 12> Free.
+Message : <Task 13> Started.
+Message : <Database> Written : 4 / 44208. 0.01% done.
+Message : <Task 13> Travelled : 540061422939025274 / 1157274477726482752. 46.67% done in PT4.769S and PT5.45S remains.
+Message : <Task 13> Paused.
+Message : <Task 13> Free.
+Message : <Task 14> Started.
+Message : <Task 15> Started.
+Message : <Database> Written : 5 / 44208. 0.01% done.
+Message : <Task 14> Travelled : 578637238863241365 / 1157274477726482752. 50.00% done in PT5.208S and PT5.208S remains.
+Message : <Task 14> Paused.
+Message : <Task 14> Free.
+Message : <Task 16> Started.
+Message : <Task 17> Started.
+Message : <Database> Written : 15 / 44208. 0.03% done.
+Message : <Task 15> Travelled : 617213054787457456 / 1157274477726482752. 53.33% done in PT6.052S and PT5.295S remains.
+Message : <Task 15> Paused.
+Message : <Task 15> Free.
+Message : <Task 18> Started.
+Message : <Task 19> Started.
+Message : <Task 20> Started.
+Message : --- 20 ---
+Message : ACC
+Message : <Task 21> Started.
+Message : <Task 22> Started.
+Message : <Database> Written : 35 / 44208. 0.08% done.
+Message : <Task 16> Travelled : 655788870711673547 / 1157274477726482752. 56.67% done in PT7.413S and PT5.668S remains.
+Message : <Task 16> Paused.
+Message : <Task 16> Free.
+Message : <Task 23> Started.
+Message : <Task 24> Started.
+Message : <Database> Written : 66 / 44208. 0.15% done.
+Message : <Task 17> Travelled : 694364686635889638 / 1157274477726482752. 60.00% done in PT7.844S and PT5.229S remains.
+Message : <Task 17> Paused.
+Message : <Task 17> Free.
+Message : <Task 25> Started.
+Message : <Database> Written : 113 / 44208. 0.26% done.
+Message : <Task 18> Travelled : 732940502560105729 / 1157274477726482752. 63.33% done in PT9.051S and PT5.24S remains.
+Message : <Task 18> Paused.
+Message : <Task 18> Free.
+Message : <Database> Written : 172 / 44208. 0.39% done.
+Message : <Task 19> Travelled : 771516318484321820 / 1157274477726482752. 66.67% done in PT9.185S and PT4.592S remains.
+Message : <Task 19> Paused.
+Message : <Task 19> Free.
+Message : <Task 26> Started.
+Message : <Task 27> Started.
+Message : <Task 28> Started.
+Message : <Database> Written : 227 / 44208. 0.51% done.
+Message : <Task 20> Travelled : 810092134408537911 / 1157274477726482752. 70.00% done in PT9.973S and PT4.274S remains.
+Message : <Task 20> Paused.
+Message : <Task 20> Free.
+Message : <Task 29> Started.
+Message : <Task> Status : [T0U-38575815924216090, NI][T1U-38575815924216090, NI][T2U-38575815924216090, NI][T3U-38575815924216090, NI][T4U-38575815924216090, NI][T5U-38575815924216090, NI][T6U-38575815924216090, NI][T7U-38575815924216090, NI][T8U-38575815924216090, NI][T9U-38575815924216090, NI][T10U-38575815924216090, NI][T11U-38575815924216090, NI][T12U-38575815924216090, NI][T13U-38575815924216090, NI][T14U-38575815924216090, NI][T15U-38575815924216090, NI][T16U-38575815924216090, NI][T17U-38575815924216090, NI][T18U-38575815924216090, NI][T19U-38575815924216090, NI][T20U-38575815924216090, NI][T21U-38575815924216090, NI][T22U-38575815924216090, NI][T23U-38575815924216090, NI][T24U-38575815924216090, NI][T25U-38575815924216090, NI][T26U-38575815924216090, NI][T27U-38575815924216090, NI][T28U-38575815924216090, NI][T29U-38575815924216112, NI]
+Message : <Database> Written : 287 / 44208. 0.65% done.
+Message : <Task 21> Travelled : 813145663412031882 / 1157274477726482752. 70.26% done in PT10.518S and PT4.451S remains.
+Message : --- SPLIT ---
+Message : <Task 21> Split and share with Task 20.
+Message : <Task 20> Resumed.
+Message : --- 20 ---
+Message : <Database> Written : 1212 / 44208. 2.74% done.
+Message : <Task 29> Travelled : 851721479336247995 / 1157274477726482752. 73.60% done in PT1M0.779S and PT21.804S remains.
+Message : <Task 29> Paused.
+Message : <Task 29> Free.
+Message : <Database> Written : 2192 / 44208. 4.96% done.
+Message : <Task 22> Travelled : 870312693508526376 / 1157274477726482752. 75.20% done in PT1M2.963S and PT20.76S remains.
+Message : <Task 22> Split and share with Task 29.
+Message : <Task 29> Resumed.
+Message : ACC
+Message : <Database> Written : 3307 / 44208. 7.48% done.
+Message : <Task 28> Travelled : 908888509432742467 / 1157274477726482752. 78.54% done in PT1M13.261S and PT20.021S remains.
+Message : <Task 28> Paused.
+Message : <Task 28> Free.
+Message : <Database> Written : 3507 / 44208. 7.93% done.
+Message : <Task 22> Travelled : 911809546243725279 / 1157274477726482752. 78.79% done in PT1M14.316S and PT20.006S remains.
+Message : <Task 22> Split and share with Task 28.
+Message : <Task 28> Resumed.
+Message : <Database> Written : 3620 / 44208. 8.19% done.
+Message : <Task 22> Travelled : 915345178276218301 / 1157274477726482752. 79.09% done in PT1M23.355S and PT22.031S remains.
+Message : <Task 22> Paused.
+Message : <Task 22> Free.
+Message : <Database> Written : 3752 / 44208. 8.49% done.
+Message : <Task 28> Travelled : 918880810308711322 / 1157274477726482752. 79.40% done in PT1M23.72S and PT21.72S remains.
+Message : <Task 28> Paused.
+Message : <Task 28> Free.
+Message : <Database> Written : 5152 / 44208. 11.65% done.
+Message : <Task 23> Travelled : 934543655113267310 / 1157274477726482752. 80.75% done in PT1M24.942S and PT20.244S remains.
+Message : <Task 23> Split and share with Task 22.
+Message : <Task 22> Resumed.
+Message : <Database> Written : 6512 / 44208. 14.73% done.
+Message : <Task 24> Travelled : 942803111323812121 / 1157274477726482752. 81.47% done in PT1M25.911S and PT19.543S remains.
+Message : <Task 24> Split and share with Task 28.
+Message : <Task 28> Resumed.
+Message : <Database> Written : 7993 / 44208. 18.08% done.
+Message : <Task 27> Travelled : 981378927248028212 / 1157274477726482752. 84.80% done in PT1M30.559S and PT16.231S remains.
+Message : <Task 27> Paused.
+Message : <Task 27> Free.
+Message : <Database> Written : 8113 / 44208. 18.35% done.
+Message : <Task 22> Travelled : 982272607611964559 / 1157274477726482752. 84.88% done in PT1M31.469S and PT16.296S remains.
+Message : <Task 22> Split and share with Task 27.
+Message : <Task 27> Resumed.
+Message : <Database> Written : 8713 / 44208. 19.71% done.
+Message : <Task 29> Travelled : 992264908487933414 / 1157274477726482752. 85.74% done in PT1M44.994S and PT17.46S remains.
+Message : <Task 29> Paused.
+Message : <Task 29> Free.
+Message : <Database> Written : 8913 / 44208. 20.16% done.
+Message : <Task 22> Travelled : 994860441759170509 / 1157274477726482752. 85.97% done in PT1M46.564S and PT17.396S remains.
+Message : <Task 22> Split and share with Task 29.
+Message : <Task 29> Resumed.
+Message : <Database> Written : 9009 / 44208. 20.38% done.
+Message : <Task 29> Travelled : 996203376422525387 / 1157274477726482752. 86.08% done in PT1M52.704S and PT18.222S remains.
+Message : <Task 29> Paused.
+Message : <Task 29> Free.
+Message : <Database> Written : 9129 / 44208. 20.65% done.
+Message : <Task 22> Travelled : 997370739692951508 / 1157274477726482752. 86.18% done in PT1M54.001S and PT18.277S remains.
+Message : <Task 22> Split and share with Task 29.
+Message : <Task 29> Resumed.
+Message : <Database> Written : 9132 / 44208. 20.66% done.
+Message : <Task 22> Travelled : 997458525389415887 / 1157274477726482752. 86.19% done in PT1M55.606S and PT18.522S remains.
+Message : <Task 22> Paused.
+Message : <Task 22> Free.
+Message : <Database> Written : 9137 / 44208. 20.67% done.
+Message : <Task 29> Travelled : 997546311085880266 / 1157274477726482752. 86.20% done in PT1M56.439S and PT18.644S remains.
+Message : <Task 29> Paused.
+Message : <Task 29> Free.
+Message : <Database> Written : 9657 / 44208. 21.84% done.
+Message : <Database> Written : 10137 / 44208. 22.93% done.
+Message : <Task 24> Travelled : 1000816236732993551 / 1157274477726482752. 86.48% done in PT1M57.417S and PT18.355S remains.
+Message : <Task 24> Split and share with Task 29.
+Message : <Task 29> Resumed.
+Message : <Task 23> Travelled : 1007557607930652496 / 1157274477726482752. 87.06% done in PT1M57.457S and PT17.453S remains.
+Message : <Task 23> Split and share with Task 22.
+Message : <Task 22> Resumed.
+Message : <Database> Written : 10644 / 44208. 24.08% done.
+Message : <Task 27> Travelled : 1012839010528599348 / 1157274477726482752. 87.52% done in PT2M1.276S and PT17.294S remains.
+Message : <Task 27> Paused.
+Message : <Task 27> Free.
+Message : <Database> Written : 10724 / 44208. 24.26% done.
+Message : <Task 22> Travelled : 1014315642502947996 / 1157274477726482752. 87.65% done in PT2M2.962S and PT17.33S remains.
+Message : <Task 22> Split and share with Task 27.
+Message : <Task 27> Resumed.
+Message : <Database> Written : 10751 / 44208. 24.32% done.
+Message : <Task 27> Travelled : 1014756105106316448 / 1157274477726482752. 87.68% done in PT2M6.308S and PT17.739S remains.
+Message : <Task 27> Paused.
+Message : <Task 27> Free.
+Message : <Database> Written : 10873 / 44208. 24.60% done.
+Message : <Task 23> Travelled : 1017113662287402002 / 1157274477726482752. 87.89% done in PT2M6.96S and PT17.495S remains.
+Message : <Task 23> Paused.
+Message : <Task 23> Free.
+Message : <Database> Written : 11053 / 44208. 25.00% done.
+Message : <Database> Written : 11053 / 44208. 25.00% done.
+Message : <Task 22> Travelled : 1017554124890770455 / 1157274477726482752. 87.93% done in PT2M8.754S and PT17.679S remains.
+Message : <Task 22> Paused.
+Message : <Task 22> Free.
+Message : <Task 24> Travelled : 1018204728238661669 / 1157274477726482752. 87.98% done in PT2M8.787S and PT17.59S remains.
+Message : <Task 24> Split and share with Task 23.
+Message : <Task 23> Resumed.
+Message : <Database> Written : 13293 / 44208. 30.07% done.
+Message : <Task 25> Travelled : 1038702776504469275 / 1157274477726482752. 89.75% done in PT2M11.626S and PT15.025S remains.
+Message : <Task 25> Split and share with Task 22.
+Message : <Task 22> Resumed.
+Message : <Database> Written : 13333 / 44208. 30.16% done.
+Message : <Task 23> Travelled : 1038760951972007438 / 1157274477726482752. 89.76% done in PT2M12.361S and PT15.101S remains.
+Message : <Task 23> Split and share with Task 27.
+Message : <Task 27> Resumed.
+Message : <Database> Written : 13561 / 44208. 30.68% done.
+Message : <Task 24> Travelled : 1041407713850492420 / 1157274477726482752. 89.99% done in PT2M22.983S and PT15.908S remains.
+Message : <Task 24> Paused.
+Message : <Task 24> Free.
+Message : <Database> Written : 13801 / 44208. 31.22% done.
+Message : <Task 22> Travelled : 1042987794319030843 / 1157274477726482752. 90.12% done in PT2M23.948S and PT15.773S remains.
+Message : <Task 22> Split and share with Task 24.
+Message : <Task 24> Resumed.
+Message : <Database> Written : 14284 / 44208. 32.31% done.
+Message : <Task 27> Travelled : 1044282087524504252 / 1157274477726482752. 90.24% done in PT2M40.456S and PT17.361S remains.
+Message : <Task 27> Paused.
+Message : <Task 27> Free.
+Message :

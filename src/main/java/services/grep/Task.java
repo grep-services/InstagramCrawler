@@ -99,6 +99,10 @@ public class Task extends Thread implements AccountCallback, DatabaseCallback {
 	@Override
 	public void run() {
 		while(status != Status.DONE) {
+			if(id == 20 && status == Status.WORKING) {
+				Logger.getInstance().printMessage("--- 20 ---");
+			}
+			
 			while(status == Status.WORKING) {// account, range 등이 exception 등에 의해 변경될 수 있다. 그 때 다시 working으로 돌리면서 진입한다.
 				//TODO: filtering하다가 exception 난 것(정보의 소실)까지는 어떻게 할 수가 없다. 그것은 그냥 crawling 몇 번 한 평균으로서 그냥 보증한다.
 				List<MediaFeedData> list;
@@ -156,6 +160,10 @@ public class Task extends Thread implements AccountCallback, DatabaseCallback {
 								splitTask(this, task);
 							}
 						} else {// split - 그냥 하면 된다.
+							if(task.getTaskId() == 20) {
+								Logger.getInstance().printMessage("--- SPLIT ---");
+							}
+							
 							splitTask(this, task);
 						}
 					}
@@ -242,18 +250,13 @@ public class Task extends Thread implements AccountCallback, DatabaseCallback {
 		this.range = range;
 	}
 	
-	/*
-	 * to가 from 미만으로 갈 수도 있는 점을 boolean으로 정리한다.
-	 * split 등등 여기서 모든 travel callback을 하지 못하는 이유가 있다. 그냥 꼼꼼히 직접 다 해준다.
-	 */
-	public boolean setRange(long from, long to) {
+	// split 등등 여기서 모든 travel callback을 하지 못하는 이유가 있다. 그냥 꼼꼼히 직접 다 해준다.
+	public void setRange(long from, long to) {
 		if(from <= to) {
 			setRange(Range.between(from, to));
 		} else {
 			setRange(null);
 		}
-		
-		return from <= to;
 	}
 	
 	public Range<Long> getRange() {
