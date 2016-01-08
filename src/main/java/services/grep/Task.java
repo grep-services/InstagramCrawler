@@ -44,6 +44,8 @@ public class Task extends Thread implements AccountCallback, DatabaseCallback {
 	
 	private static final long BOUND = 10000;// 대략 20 * LIMIT 정도로 해서 LIMIT 안넘을 정도로 잡았다.(중요한 기준은 아니다.)
 	
+	private long start;
+	
 	TaskCallback callback;
 	
 	public Task(String tag, Range<Long> range, TaskCallback callback) {
@@ -95,11 +97,18 @@ public class Task extends Thread implements AccountCallback, DatabaseCallback {
 	public void onDatabaseWritten(int written) {
 		callback.onTaskWritten(written);
 	}
-
+	
 	@Override
 	public void run() {
+		start = System.currentTimeMillis();
+		
 		while(status != Status.DONE) {
-			Logger.getInstance().printMessage("<Task %d> Breaked.", id);// 너무 빠르면 안돌아가는듯. 이것과 함께 sync가 있어야 돌아가는듯.
+			if(System.currentTimeMillis() - start > 10000) {// 너무 빠르면 안돌아가는듯. 이런것과 함께 sync가 있어야 돌아가는듯.
+				Logger.getInstance().printMessage("<Task %d> Waiting...", id);
+				
+				start = System.currentTimeMillis();
+			}
+			
 			while(status == Status.WORKING) {// account, range 등이 exception 등에 의해 변경될 수 있다. 그 때 다시 working으로 돌리면서 진입한다.
 				//TODO: filtering하다가 exception 난 것(정보의 소실)까지는 어떻게 할 수가 없다. 그것은 그냥 crawling 몇 번 한 평균으로서 그냥 보증한다.
 				List<MediaFeedData> list;
@@ -229,10 +238,6 @@ public class Task extends Thread implements AccountCallback, DatabaseCallback {
 	
 	public void resumeTask() {
 		Logger.getInstance().printMessage("<Task %d> Resumed.", id);
-		
-		if(id == 0) {
-			Logger.getInstance().printMessage("RESUMED");
-		}
 		
 		status = Status.WORKING;
 	}
