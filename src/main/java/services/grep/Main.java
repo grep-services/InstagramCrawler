@@ -26,7 +26,7 @@ import org.apache.commons.lang3.Range;
 
 public class Main implements TaskCallback {
 
-	final String tag = "허니버터";
+	final String tag = "허니버터";// 24837/44274 정도.
 	
 	List<Account> accounts;
 	List<Task> tasks;
@@ -312,7 +312,7 @@ public class Main implements TaskCallback {
 	
 	class Observer extends Thread {
 		
-		final long PERIOD = 5 * 60 * 1000;// 5분
+		final long PERIOD = 1 * 60 * 1000 / 2;// 30초
 		StringBuilder message;
 		
 		public Observer() {
