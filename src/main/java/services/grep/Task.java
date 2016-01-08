@@ -99,7 +99,7 @@ public class Task extends Thread implements AccountCallback, DatabaseCallback {
 	@Override
 	public void run() {
 		while(status != Status.DONE) {
-			Logger.getInstance().printMessage("<Task %d> Breaked.", id);
+			Logger.getInstance().printMessage("<Task %d> Breaked.", id);// 너무 빠르면 안돌아가는듯. 이것과 함께 sync가 있어야 돌아가는듯.
 			while(status == Status.WORKING) {// account, range 등이 exception 등에 의해 변경될 수 있다. 그 때 다시 working으로 돌리면서 진입한다.
 				//TODO: filtering하다가 exception 난 것(정보의 소실)까지는 어떻게 할 수가 없다. 그것은 그냥 crawling 몇 번 한 평균으로서 그냥 보증한다.
 				List<MediaFeedData> list;
@@ -196,7 +196,7 @@ public class Task extends Thread implements AccountCallback, DatabaseCallback {
 			
 			setRange(min, min + pivot);// 여기서 먼저 set 된 것이 밑에 이용되어서 꼬였었다.
 			
-			synchronized (task) {
+			synchronized (task) {// sync의 이유 사실 없지만, while에서 진행이 안되는 것이 혹시 이 이유이지 않을까 싶어서 걸었다. 그런데 필요한듯.
 				task.setRange(min + pivot + 1, max);// size >= 1 만 되어도 이 range는 최소 size 1이 되어서 문제없다.
 				task.resumeTask();
 			}
