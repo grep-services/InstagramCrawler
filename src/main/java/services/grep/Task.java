@@ -46,10 +46,16 @@ public class Task extends Thread implements AccountCallback, DatabaseCallback {
 	
 	private long start;
 	
+	private boolean schedulable = true;
+	final Object scheduleMonitor = new Object();
+	private final Object statusMonitor = new Object();
+	
+	private static final long WAIT_DELAY = 10000;// STATUS WAIT DELAY.
+	
 	TaskCallback callback;
 	
 	public Task(String tag, Range<Long> range, TaskCallback callback) {
-		setDaemon(true);
+		setDaemon(true);// 사실 observer 전에 끝남을 거의 보장할 수는 있지만, exception, error 등에 대비하기 위함이다. 
 		
 		this.tag = tag;
 		this.range = range;
@@ -68,6 +74,29 @@ public class Task extends Thread implements AccountCallback, DatabaseCallback {
 	
 	public Account getAccount() {
 		return account;
+	}
+	
+	public void setSchedulable(boolean schedulable) {
+		this.schedulable = schedulable;
+	}
+	
+	public boolean isSchedulable() {
+		return schedulable;
+	}
+	
+	// observer와 loop에서 하나만 실행되도록 sync 이용.
+	public void schedule() {
+		synchronized (scheduleMonitor) {
+			if(schedulable) {
+				schedulable = false;
+				
+				pauseTask();// 미리 break되도록 해놓으면 아래 method에서 status가 바로 바뀌든 나중에 바뀌든 문제없이 돌아갈 것이다.
+				
+				if(callback.onTaskScheduling(this)) {// task를 다 가지고 있는 main에서 처리할 수 있기 때문에 callback해야 한다.
+					stopTask();
+				}// else의 경우는 그냥 callback의 실행 내용에 따르며 range, status 등도 알아서 결정될 것이다.
+			}
+		}
 	}
 	
 	public void writeListToDB(List<MediaFeedData> list) {
@@ -103,13 +132,15 @@ public class Task extends Thread implements AccountCallback, DatabaseCallback {
 		start = System.currentTimeMillis();
 		
 		while(status != Status.DONE) {
-			if(System.currentTimeMillis() - start > 10000) {// 너무 빠르면 안돌아가는듯. 이런것과 함께 sync가 있어야 돌아가는듯.
-				Logger.getInstance().printMessage("<Task %d> Waiting...", id);
-				
-				start = System.currentTimeMillis();
+			synchronized (statusMonitor) {// loop를 감싸기도 힘들고, 실제 쓸 내용은 없고 해서 이렇게라도 간간히 sync를 잡는다.
+				if(System.currentTimeMillis() - start > WAIT_DELAY) {// 너무 빠르면 안돌아가는듯. 이런것과 함께 sync가 있어야 돌아가는듯.
+					Logger.getInstance().printMessage("<Task %d> Waiting...", id);
+					
+					start = System.currentTimeMillis();
+				}
 			}
 			
-			while(status == Status.WORKING) {// account, range 등이 exception 등에 의해 변경될 수 있다. 그 때 다시 working으로 돌리면서 진입한다.
+			while(status == Status.WORKING) {
 				//TODO: filtering하다가 exception 난 것(정보의 소실)까지는 어떻게 할 수가 없다. 그것은 그냥 crawling 몇 번 한 평균으로서 그냥 보증한다.
 				List<MediaFeedData> list;
 				
@@ -122,11 +153,7 @@ public class Task extends Thread implements AccountCallback, DatabaseCallback {
 					
 					setRange(null);// 0으로 resize도 해준다.(사실 상징적인 의미)
 					
-					pauseTask();// 미리 break되도록 해놓으면 아래 method에서 status가 바로 바뀌든 나중에 바뀌든 문제없이 돌아갈 것이다.
-					
-					if(callback.onTaskFree(this)) {// task를 다 가지고 있는 main에서 처리할 수 있기 때문에 callback해야 한다.
-						stopTask();
-					}// else의 경우는 그냥 callback의 실행 내용에 따르며 range, status 등도 알아서 결정될 것이다.
+					schedule();
 				} catch (Exception e) {
 					Result result = (Result) e;
 					
@@ -144,12 +171,8 @@ public class Task extends Thread implements AccountCallback, DatabaseCallback {
 					 * 여기서도 observer에서처럼 limit와 겹칠수도 있지만
 					 * 마찬가지로 scheduling되고 나서 어차피 limit가 여전히 문제라면 거기서 exception에 걸려서 처리될 것이므로 문제없다.
 					 */
-					if(range == null) { 
-						pauseTask();// 이것도 역시 미리 break해둔다.
-						
-						if(callback.onTaskFree(this)) {
-							stopTask();
-						}
+					if(range == null) {
+						schedule();
 					} else {// 일반적인 exception 처리. element가 단 1개라도 있다는 이야기도 된다.
 						Task task = result.getTask();// 필요하다면 this를 split해서 task에게 나눠줄 것이다.
 						
@@ -167,6 +190,12 @@ public class Task extends Thread implements AccountCallback, DatabaseCallback {
 							}
 						} else {// split - 그냥 하면 된다.
 							splitTask(task);
+						}
+					}
+				} finally {// interrupted에 의한 schedulable 처리는 split에서보다 이곳이 가장 확실하다. 분명히 다른 곳들에서도 있었기 때문에 NS가 남아있고 done이 안되었던 것일 것이다.
+					if(account.getInterruptTask() != null) {
+						synchronized (account.getInterruptTask().scheduleMonitor) {
+							account.getInterruptTask().setSchedulable(true);
 						}
 					}
 				}
@@ -195,9 +224,9 @@ public class Task extends Thread implements AccountCallback, DatabaseCallback {
 	 * task는 range null callback되는 것도 결국 단일 call이 되기 때문에 interruptable에 문제가 안생기고 sync 필요없다고 판단했다. 
 	 */
 	private void splitTask(Task task) {// 일단 sync할 필요 없을 것 같아서 안했다.
-		long size = range.getMaximum() - range.getMinimum();
+		long size = range.getMaximum() - range.getMinimum();// 애초에 null이면 split으로 안오고 free로 간다. 즉 not null.
 		
-		if(size > BOUND) {
+		if(size > BOUND) {// 어차피 0 초과이므로 항상 split 가능하다.
 			Logger.getInstance().printMessage("<Task %d> Split and share with Task %d.", id, task.getTaskId());
 			
 			long max = range.getMaximum(), min = range.getMinimum();// 미리 해놔야 밑에서 안 꼬인다.
@@ -205,8 +234,9 @@ public class Task extends Thread implements AccountCallback, DatabaseCallback {
 			
 			setRange(min, min + pivot);// 여기서 먼저 set 된 것이 밑에 이용되어서 꼬였었다.
 			
-			synchronized (task) {// sync의 이유 사실 없지만, while에서 진행이 안되는 것이 혹시 이 이유이지 않을까 싶어서 걸었다. 그런데 필요한듯.
-				task.setRange(min + pivot + 1, max);// size >= 1 만 되어도 이 range는 최소 size 1이 되어서 문제없다.
+			task.setRange(min + pivot + 1, max);// size >= 1 만 되어도 이 range는 최소 size 1이 되어서 문제없다.
+			
+			synchronized (task.statusMonitor) {// wait-noti나 task lock 모두 task obj를 쓰므로 다른데에 방해된다.
 				task.resumeTask();
 			}
 		}// bound보다 작은 것에 대해서는, task가 그대로 떠맡을 것이고, task_는 그대로 unavailable을 유지할 것이다.
@@ -280,7 +310,7 @@ public class Task extends Thread implements AccountCallback, DatabaseCallback {
 	}
 
 	public interface TaskCallback {
-		boolean onTaskFree(Task task);
+		boolean onTaskScheduling(Task task);
 		boolean onTaskDischarged(Task task);
 		void onTaskTravelled(Task task, long visited);
 		void onTaskWritten(int written);

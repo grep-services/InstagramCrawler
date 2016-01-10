@@ -44,7 +44,7 @@ public class Account {
 	
 	boolean interruptable = false;
 	boolean interrupted = false;
-	Task task;// for split
+	private Task task;// for split
 	
 	private static final int LIMIT = 5000;
 	
@@ -121,10 +121,6 @@ public class Account {
 	 * 2차 exception은 애초에 여기서 바로 다시 시도하는 것이 아니기 때문에 고려할 필요 없다.
 	 */
 	public List<MediaFeedData> getListFromTag(String tag, long from, long to) throws Exception {
-		if(((Task) callback).getTaskId() == 20) {
-			Logger.getInstance().printMessage("ACC");
-		}
-		
 		List<MediaFeedData> result = new ArrayList<MediaFeedData>();// 값 유지를 위해 공간은 만들어두어야 한다.
 		
 		try {
@@ -183,7 +179,9 @@ public class Account {
 				/*
 				 * 모든 instagramexception이 limit문제는 아니지만, 어차피 account change 정도이므로 괜찮다.
 				 * 실제적으로는 instagramexception(limit를 포함한) 자체가 거의 안날 것이고
-				 * 난다 하더라도 할당할 account가 없을 것이며 결국 task는 unavailable에 빠져 있다가 account가 free되면서 다시 자기 account를 갖게 될 확률이 높다.
+				 * 난다 하더라도 할당할 account가 없을 것이며 결국 자기 account를 갖게 될 확률이 높다.
+				 * 어쨌든 여기서 연결되는 callback은 결국 이 account의 status는 free를 얻거나, 자기자신을 free로 만들거나(확률 거의 0), 자기자신을 unavailable로 만들게 될 것이다.
+				 * 즉, status는 확실히 정해진다는 소리이며 다른데에서 checkable하다는 말이기도 하다.(limit exceeded가 account unavailable과 같다는 소리)
 				 */
 				if(interrupted) {// interrupted인 채로 올 수도 있다. 다만 result가 없는 등의 문제는 있을 수 있다.
 					interrupted = false;
@@ -215,6 +213,10 @@ public class Account {
 	
 	public boolean getInterruptable() {
 		return interruptable;
+	}
+	
+	public Task getInterruptTask() {
+		return task;
 	}
 	
 	/*
@@ -272,14 +274,12 @@ public class Account {
 	
 	/* 
 	 * 정의를 확실히 한다.
-	 * 할당되면 limit/2 over든 under든 무조건 working이다.
-	 * 할당안되었을 때 over면 free, under면 unavailable이다.
+	 * set될 때는 working이 되며, 여기서는 free, unavailable만 설정된다.
+	 * over limit/2는 free, under는 unavailable이다.
+	 * callback 없는 account에 대해서만 실행될 것이다.(즉 not working account.)
+	 * 단 하나의 예외는 있는데, task가 자기 자신의 account에 대해서는 check할 수 있다.(즉 its working account.)
 	 */
 	public void updateStatus() {
-		if(callback != null) {// 할당된 상태면 필요없는데, 밖에서보다 여기서 그냥 skip해준다.
-			return;
-		}
-		
 		int remaining = getRateRemaining();
 		
 		if(remaining != -1) {

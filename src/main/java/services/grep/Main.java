@@ -120,12 +120,10 @@ public class Main implements TaskCallback {
 		boolean completed = true;
 		
 		for(Task task : tasks) {
-			synchronized (task) {// 이왕이면 하는게 낫다.
-				if(task.getStatus() != Task.Status.DONE) {
-					completed = false;
-					
-					break;
-				}
+			if(task.getStatus() != Task.Status.DONE) {
+				completed = false;
+				
+				break;
 			}
 		}
 		
@@ -133,54 +131,99 @@ public class Main implements TaskCallback {
 	}
 	
 	/*
+	 * 새 account 또는 자기 account를 check해서 alloc한다.
 	 * 초기 alloc 뿐만 아니라 change를 위해서도 쓰인다.
 	 * 특히 change일 때에는 미리 기존 account를 정리해줘야 한다.(free or unavailable)
+	 * 사실상 이건, account와 task 개수가 같은 static 환경에서는 큰 의미가 없다.
+	 * 차후 account 동적 추가 삭제 가능할 때나 필요할 기능이다.
 	 */
 	public boolean allocAccount(Task task) {
-		synchronized (task) {
-			for(Account account : accounts) {
+		for(Account account : accounts) {// 모든 account가 아니라, callback없는 account 또는 자기 자신의 account만 check한다.
+			if(account.getCallback() == null || account.equals(task.getAccount())) {
 				account.updateStatus();
 				
 				if(account.getStatus() == Account.Status.FREE) {
-					if(task.getAccount() != null) {// 만약 기존에 account가 있었다면 미리 set callback null 및 update status 해준다.(어차피 unavailable이 될 것이긴 하지만)
-						task.getAccount().setCallback(null);
-						task.getAccount().updateStatus();
+					if(!account.equals(task.getAccount())) {// task account null 또는 자기것이 아닌 account에 대한 내용이다.
+						if(task.getAccount() != null) {
+							/*
+							 * 만약 기존에 account가 있었다면(자기 것은 pass)
+							 * 미리 set callback null 및 update status 해준다.
+							 * (어차피 unavailable이 될 것이긴 하지만)
+							 */
+							task.getAccount().setCallback(null);
+							task.getAccount().updateStatus();
+						}
+						
+						task.setAccount(account);// 결국 자기 것은 이미 set 되어 있으므로 set 필요없다.
 					}
-					
-					task.setAccount(account);
 					
 					return true;
 				}
 			}
-			
-			return false;
 		}
+		
+		return false;
 	}
 	
 	/*
-	 * working이 하나도 없이 전부 unavailable이라면 이 task는 종료되면 된다.(다른 task들도 종료될 것이다.)
 	 * working이 하나라도 있다면 이 task는 interrupt를 하거나 아니면 그냥 pause로 계속 loop를 돌면서 observer의 처리를 기다린다.
+	 * unavailable 중 account unavailable이 하나라도 있다면 range를 가져온다.(그러면 나머지 task들이 분배해갈 것이다.)
+	 * 나머지 경우 즉 unavailable이면서 range null인 것들만 다 있다면 task는 done되면 된다.(다른 task들도 done될 것이다.)
 	 */
 	public boolean scheduleTask(Task task) {
 		boolean done = true;
+		boolean interrupted = false;
 		
-		for(Task task_ : tasks) {
-			synchronized (task_) {
-				if(task_.getStatus() == Task.Status.WORKING) {// unavailable은 task와 같은 처지로서 신경쓰지 않는다.(task 자신도 이미 unavailable이다.)
-					/*
-					 * working task가 있다는 자체로, interrupt 아니면 wait이니 아직 done될 때는 아니다.
-					 * 만약 중간에 working이 unavailable등으로 된다 하더라도 어차피 observer에서 다시 해결될 것이며
-					 * 사실상 monitor가 있기에 중간에 status change는 없을 것이다.
-					 */
-					done = false;
-					
+		for(Task task_ : tasks) {//TODO: 거의 다 되어가는데, DONE FALSE 부분 맞는지 정확히 CHECK. 왠지 SYNC 안으로 들어가야 하는 것일지도.
+			if(task_.getStatus() == Task.Status.WORKING) {// loop에 들어간 것만 골라서(interruptable) split시킨다.
+				/*
+				 * working task가 있다는 자체로, interrupt 아니면 wait이니 아직 done될 때는 아니다.
+				 * 만약 중간에 working이 unavailable등으로 된다 하더라도 어차피 observer에서 다시 해결될 것이며
+				 * 사실상 monitor가 있기에 중간에 status change는 없을 것이다.
+				 */
+				done = false;
+				
+				synchronized (task_.scheduleMonitor) {// interruptable check시점부터가 정확히 필요한 시점이다.
 					if(task_.isInterruptable()) {
 						task_.interruptTask(task);
 						
+						interrupted = true;
+						
 						break;
-					} 
+					}
+				}
+			} else if(task_.getStatus() == Task.Status.UNAVAILABLE) {// 크게 discharged와 batch, free가 있다.
+				if(task_.getAccount() == null) {// 시작시 null인 상태도 있다. 그냥 done false하고 pass한다.
+					done = false;
+				} else {
+					if(task_.getAccount().getStatus() == Account.Status.UNAVAILABLE) {// discharged. range 교환한다.
+						synchronized (task_.scheduleMonitor) {// 여기는 range null check시점부터가 정확한 시점이다.
+							if(task_.getRange() != null) {
+								done = false;// 아직 처리할 task가 남은 것이므로 done은 안된다.
+								
+								// range를 갖고온다.
+								task.setRange(task_.getRange());
+								task.resumeTask();
+								
+								task_.setRange(null);// alloc 시도까지 해줘도 문제없지만 이미 sync도 걸려있고 복잡하므로 observer에 맡긴다.
+							}// discharged도 range null이면 일단 종료 조건은 된다.
+						}
+					} else {// working이다. range null(schedule 필요)인 경우와 not null(batch restart)인 경우가 있다.
+						if(task_.getRange() != null) {// batch restart를 위한 것이며 done false해야한다.
+							done = false;
+						}// else인 scheduling 경우에는 done 유지된다.
+					}
 				}
 			}
+		}
+		
+		/*
+		 * TODO:
+		 * done을 추가하면 최종적으로 not schedulable로 done될 것 같지만, 100%로 안떨어지는 오차가 가끔 생긴다.
+		 * 그 이유를 아직 잘 모르겠지만 일단 range null이 schedulable되어도 done만 되면 문제 없기 때문에 안전한 것으로 간다.
+		 */
+		if(!interrupted) {
+			task.setSchedulable(true);// 이미 monitor 잡혀있다.
 		}
 		
 		return done;
@@ -190,7 +233,7 @@ public class Main implements TaskCallback {
 	 * 당장 판단을 할 수 없는 경우도 있다. 그럴 때는 pasue한다.(working인데 interruptable은 아닌 경우들이 있을 때.)
 	 */
 	@Override
-	public boolean onTaskFree(Task task) {// scheduling 성공여부를 return해서 .... 그런데 check는... range null, task status, interruptable 등이 있다. 적절히... 해보기.
+	public boolean onTaskScheduling(Task task) {// scheduling 성공여부를 return해서 .... 그런데 check는... range null, task status, interruptable 등이 있다. 적절히... 해보기.
 		Logger.getInstance().printMessage("<Task %d> Free.", task.getTaskId());
 		
 		return scheduleTask(task);
@@ -213,7 +256,7 @@ public class Main implements TaskCallback {
 		showDatabaseProgress(written);
 	}
 	
-	public void showDatabaseProgress(int written) {
+	public synchronized void showDatabaseProgress(int written) {
 		done += written;
 		
 		Logger.getInstance().printMessage("<Database> Written : %d / %d. %.2f%% done.", done, size, getDatabaseProgress());
@@ -316,7 +359,7 @@ public class Main implements TaskCallback {
 		StringBuilder message;
 		
 		public Observer() {
-			setDaemon(true);
+			setDaemon(true);// exception, error 등에 대비하기 위함.
 		}
 		
 		@Override
@@ -327,31 +370,38 @@ public class Main implements TaskCallback {
 				message = new StringBuilder("<Task> Status : ");
 				
 				for(Task task : tasks) {
-					synchronized (task) {// task done 동시 체크까지 다 sync 잡을순 없어도 여기선 sync해줘야 한다.
-						message.append(String.format("[T%d%s-%d, %s]", task.getTaskId(), task.getStatus().getNick(), task.getRange() != null ? task.getRange().getMaximum() - task.getRange().getMinimum() : 0, task.getAccount() != null ? (task.isInterruptable() ? "I" : "NI") : "NI"));
-						if(task.getStatus() == Task.Status.UNAVAILABLE) {
-							if(task.getAccount() == null) {// 원래 초기화는 밖에서 하려 했으나, 이것도 마찬가지로 한번에 안될 수 있으므로 여기서 했다.
-								if(allocAccount(task)) {
-									task.startTask();
-								}
-							} else {
-								/*
-								 * 아래의 if는 split을 기다리는 것이고, else는 alloc을 기다리는 것이다.
-								 * split을 기다리는 것 또한 alloc이 필요할 수는 있다.
-								 * 다만 굳이 account update를 다시 하지 않아도, 어차피 rescheduled 이후의 account cycle에서 알아서 다시 limit exception 나든 될 것이다.
-								 */
-								if(task.getRange() == null) {
-									if(scheduleTask(task)) {
-										task.stopTask();
+					message.append(String.format("[T%d%s-%d, %s/%s]", task.getTaskId(), task.getStatus().getNick(), task.getRange() != null ? task.getRange().getMaximum() - task.getRange().getMinimum() : 0, task.getAccount() != null ? (task.isInterruptable() ? "I" : "NI") : "NI", task.isSchedulable() ? "S" : "NS"));
+					
+					if(task.getStatus() == Task.Status.UNAVAILABLE) {
+						if(task.getAccount() == null) {// 원래 초기화는 밖에서 하려 했으나, 이것도 마찬가지로 한번에 안될 수 있으므로 여기서 했다.
+							if(allocAccount(task)) {
+								task.startTask();
+							}
+						} else {
+							/*
+							 * 아래의 if는 split을 기다리는 것이고, else 중의 account unavailable은 alloc을 기다리는 것이다.
+							 * split을 기다리는 것 또한 alloc이 필요할 수는 있다.
+							 * 다만 굳이 account update를 다시 하지 않아도, 어차피 rescheduled 이후의 account cycle에서 알아서 다시 limit exception 나든 될 것이다.
+							 */
+							if(task.getRange() == null) {
+								synchronized (task.scheduleMonitor) {
+									if(task.isSchedulable()) {
+										task.setSchedulable(false);
+										
+										if(scheduleTask(task)) {
+											task.stopTask();
+										}
 									}
-								} else {
+								}
+							} else {// 여기 들어왔다고 다 exceeded 아니다. batch limit 때문에 잠시 들어온 것들도 있는 만큼 filter해준다.
+								if(task.getAccount().getStatus() == Account.Status.UNAVAILABLE) {// 어차피 loop랑 안겹쳐서 sync 필요없다.
 									if(allocAccount(task)) {// 이미 pause, resize되어 있다. 할당해보고 되면 resume하고, 안되면 다시 pass.
 										task.resumeTask();
 									};
 								}
 							}
 						}
-					}
+					}// working task는 I/NI 둘 뿐인데 건들 것 없다.
 				}
 				
 				Logger.getInstance().printMessage(message.toString());
