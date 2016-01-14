@@ -149,7 +149,7 @@ public class Task extends Thread implements AccountCallback, DatabaseCallback {
 					
 					writeListToDB(list);// 일단 db write부터.
 					
-					callback.onTaskTravelled(this, range.getMaximum() - range.getMinimum() + 1);
+					callback.onTaskTravelled(this, range.getMaximum() - range.getMinimum() + 1);//TODO: TRAVEL과 SCHEDULE이 안 묶여 있으면 어차피 일치도 안될 수 있다.(SCHEDULE은 실행 안될수도 있다.)
 					
 					setRange(null);// 0으로 resize도 해준다.(사실 상징적인 의미)
 					
