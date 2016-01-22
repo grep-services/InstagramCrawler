@@ -26,7 +26,7 @@ import org.apache.commons.lang3.Range;
 
 public class Main implements TaskCallback {
 
-	final String tag = "먹스타그램";// 24837/44274 정도.
+	final String tag = "허니버터";// 24837/44274 정도.
 	
 	List<Account> accounts;
 	List<Task> tasks;
@@ -143,18 +143,15 @@ public class Main implements TaskCallback {
 				account.updateStatus();
 				
 				if(account.getStatus() == Account.Status.FREE) {
-					if(!account.equals(task.getAccount())) {// task account null 또는 자기것이 아닌 account에 대한 내용이다.
-						if(task.getAccount() != null) {
-							/*
-							 * 만약 기존에 account가 있었다면(자기 것은 pass)
-							 * 미리 set callback null 및 update status 해준다.
-							 * (어차피 unavailable이 될 것이긴 하지만)
-							 */
+					if(account.getCallback() == null) {
+						if(task.getAccount() != null) {// task가 이미 account 갖고 있으면 처리해준다.
 							task.getAccount().setCallback(null);
 							task.getAccount().updateStatus();
+							
+							task.setAccount(account);
 						}
-						
-						task.setAccount(account);// 결국 자기 것은 이미 set 되어 있으므로 set 필요없다.
+					} else {
+						account.setStatus(Account.Status.WORKING);// 그냥 status만 바꿔주면 된다.
 					}
 					
 					return true;
