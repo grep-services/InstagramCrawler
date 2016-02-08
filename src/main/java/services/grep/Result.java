@@ -7,32 +7,33 @@ import org.jinstagram.entity.users.feed.MediaFeedData;
 /**
  * 
  * exception이긴 하지만 result의 역할로서
- * status와 result, task를 담아 전달된다.
- * object로 봐도 되지만, 뭐 일단 어느정도 정해져있으니 그냥 간다.
+ * result, message를 담아 전달된다.
+ * 
+ * status, list를 담기 위한 class로 변경.
  * 
  * @author marine1079
  * @since 151228
  *
  */
-public class Result extends Exception {
-	private static final long serialVersionUID = 2484495357182303170L;
+public class Result {
 	
-	private static final String MSG = "<Result>";
-	
+	/*
+	 * normal은 normal result, normal exception, batch를 포함.
+	 * empty는 range null.
+	 * exceed는 instagram exception. limit 0는 어차피 다시 exceeded될 것이다.
+	 */
 	public enum Status {
-		NORMAL, LIMIT, SPLIT;
-	}
-
+		Normal, Empty, Exceed
+	};
+	
 	private Status status;
 	private List<MediaFeedData> result;
-	private Task task;
 	
-	public Result(Status status, List<MediaFeedData> result, Task task) {
-		super(String.format(MSG));
+	public Result(Status status, List<MediaFeedData> result) {
+		//super();
 		
 		this.status = status;
 		this.result = result;
-		this.task = task;
 	}
 	
 	public Status getStatus() {
@@ -43,7 +44,4 @@ public class Result extends Exception {
 		return result;
 	}
 	
-	public Task getTask() {
-		return task;
-	}
 }

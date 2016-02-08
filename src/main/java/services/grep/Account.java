@@ -3,6 +3,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
+import org.apache.commons.lang3.Range;
 import org.jinstagram.Instagram;
 import org.jinstagram.auth.model.Token;
 import org.jinstagram.entity.common.Pagination;
@@ -26,11 +27,6 @@ import org.jinstagram.exceptions.InstagramException;
  */
 
 public class Account {
-
-	public enum Status {// 단순히 boolean으로는 정확히 다룰 수가 없고, 그러면 꼬일 수가 있어서 이렇게 간다.
-		UNAVAILABLE, WORKING, FREE;// 단순 교대기 때문에, reserved는 의미가 없다. 그냥 할당되면 그것으로 working인 것이다.
-	}
-	public Status status;
 	
 	int id;
 	
@@ -42,14 +38,6 @@ public class Account {
 	
 	private static final int BATCH = 10000;// 1개가 0.1KB정도라고 쳤을 때 1MB 정도가 되며, 30개의 acc면 30m 정도이다. 10만개 단위는 좀 많다.
 	
-	boolean interruptable = false;
-	boolean interrupted = false;
-	private Task task;// for split
-	
-	private static final int LIMIT = 5000;
-	
-	AccountCallback callback;// 내용은 없지만, alloc의 증거로서 필요하다.(status로 만들수도 있었지만 이렇게 간다.)
-
 	public Account(String clientId, String clientSecret, String accessToken) {
 		this.clientId = clientId;
 		this.clientSecret = clientSecret;
@@ -59,19 +47,27 @@ public class Account {
 	}
 	
 	public void init() {
-		status = Status.UNAVAILABLE;
-		
 		Token token = new Token(accessToken, clientSecret);
 		
 		instagram = new Instagram(token);
 	}
 	
-	public void setCallback(AccountCallback callback) {
-		this.callback = callback;
-	}
-	
-	public AccountCallback getCallback() {
-		return callback;
+	public long getLastMediaId(String tag) {
+		long id = 0;
+		
+		try {
+			TagMediaFeed list = instagram.getRecentMediaTags(tag, null, null);
+			
+			List<MediaFeedData> data = list.getData();
+			
+			if(data != null && !data.isEmpty()) {
+				id = extractId(data.get(0).getId());
+			}
+		} catch (InstagramException e) {
+			Logger.getInstance().printException(e);
+		}
+		
+		return id;
 	}
 	
 	public long getTagCount(String tag) {
@@ -94,24 +90,6 @@ public class Account {
 		return count;
 	}
 	
-	public long getLastMediaId(String tag) {
-		long id = 0;
-		
-		try {
-			TagMediaFeed list = instagram.getRecentMediaTags(tag, null, null);
-			
-			List<MediaFeedData> data = list.getData();
-			
-			if(data != null && !data.isEmpty()) {
-				id = extractId(data.get(0).getId());
-			}
-		} catch (InstagramException e) {
-			Logger.getInstance().printException(e);
-		}
-		
-		return id;
-	}
-	
 	/*
 	 * 너무 복잡하면 힘들다.
 	 * 여기서 하던 filtering은 밖으로 뺀다.
@@ -119,9 +97,16 @@ public class Account {
 	 * db insertion도 밖으로 뺀다.
 	 * 즉, 여기서는 무조건 값만 받고, 자연스럽게 또는 exception에 의해 return한다.
 	 * 2차 exception은 애초에 여기서 바로 다시 시도하는 것이 아니기 때문에 고려할 필요 없다.
+	 * 
+	 * result, exception 정리를 위해 result exception throw로 return 단일화한다.
 	 */
-	public List<MediaFeedData> getListFromTag(String tag, long from, long to) throws Exception {
-		List<MediaFeedData> result = new ArrayList<MediaFeedData>();// 값 유지를 위해 공간은 만들어두어야 한다.
+	public Result getListFromTag(String tag, Range<Long> range) {
+		Result.Status status = Result.Status.Empty;// default는 not exception으로서 entire range travelled를 뜻한다.
+		List<MediaFeedData> result = new ArrayList<MediaFeedData>();// 값 유지를 위해 공간은 만들어두어야 한다. TODO: 다시 확인.
+		
+		// TODO: RANGE NULL CHECK 일단 뺐는데, 필요할지 확인.
+		long from = range.getMinimum();
+		long to = range.getMaximum();
 		
 		try {
 			// library가 object 구조를 좀 애매하게 해놓아서, 바로 loop 하기보다, 1 cycle은 직접 작성해주는 구조가 되었다.
@@ -137,18 +122,8 @@ public class Account {
 					
 		            while(true) {
 		            	if(!addFilteredData(result, nextData, from, to)) {// filter가 안되어야만 다음으로 넘어가고, 아니면 그냥 그대로 끝이다.
-		            		if(!interruptable && !interrupted) {// interrupt 될 때는 able도 false되기 때문에 그 조건은 피해야 한다.
-	            				interruptable = true;// 여기서 bound check 하려다가 너무 조건이 많아져서 뺐다.
-		            		}
-		            		
-		            		if(interrupted) {
-		            			interrupted = false;
-		            			
-		            			throw new Result(Result.Status.SPLIT, result, task);
-		            		}
-		            		
 		            		if(result != null && result.size() > BATCH) {
-		            			throw new Exception();
+		            			throw new Exception();//TODO: 밑으로 내려가는지 확인.
 		            		}
 		            		
 			    			if(nextPage.hasNextPage()) {
@@ -162,61 +137,25 @@ public class Account {
 		            		break;
 		            	}
 		            }
-		            
-					if(interruptable) {// while을 벗어나기만 하면 바로 false해줘야 다른데서도 안걸리도 자기자신도 피해간다.
-						interruptable = false;
-					}
 				}
 			}
-		} catch (Exception e) {
-			if(interruptable) {// while을 벗어나기만 하면 바로 false해줘야 다른데서도 안걸리도 자기자신도 피해간다.
-				interruptable = false;
+		} catch (Exception e) {// 아래의 단계를 거치게 해야 task loop에서의 처리가 깔끔해진다.
+			status = Result.Status.Normal;// 기본적으로 normal.
+			
+			if(e instanceof InstagramException) {// 만약 insta exception이라면 exceed로 간주.
+				status = Result.Status.Exceed;
 			}
 			
-			if(e instanceof Result) {
-				throw e;
-			} else if (e instanceof InstagramException){
-				/*
-				 * 모든 instagramexception이 limit문제는 아니지만, 어차피 account change 정도이므로 괜찮다.
-				 * 실제적으로는 instagramexception(limit를 포함한) 자체가 거의 안날 것이고
-				 * 난다 하더라도 할당할 account가 없을 것이며 결국 자기 account를 갖게 될 확률이 높다.
-				 * 어쨌든 여기서 연결되는 callback은 결국 이 account의 status는 free를 얻거나, 자기자신을 free로 만들거나(확률 거의 0), 자기자신을 unavailable로 만들게 될 것이다.
-				 * 즉, status는 확실히 정해진다는 소리이며 다른데에서 checkable하다는 말이기도 하다.(limit exceeded가 account unavailable과 같다는 소리)
-				 */
-				if(interrupted) {// interrupted인 채로 올 수도 있다. 다만 result가 없는 등의 문제는 있을 수 있다.
-					interrupted = false;
-					
-					throw new Result(Result.Status.LIMIT, result, task);
-				} else {
-					throw new Result(Result.Status.LIMIT, result, null);
-				}
-			} else {
-				if(interrupted) {// interrupted인 채로 올 수도 있다. 다만 result가 없는 등의 문제는 있을 수 있다.
-					interrupted = false;
-					
-					throw new Result(Result.Status.NORMAL, result, task);
-				} else {
-					throw new Result(Result.Status.NORMAL, result, null);
+			if(result != null && !result.isEmpty()) {// 그런데 만약 full travel이라면 empty로 간주.
+				long id = extractId(result.get(result.size() - 1).getId());
+				
+				if(id == range.getMinimum()) {
+					status = Result.Status.Empty;
 				}
 			}
 		}
 		
-		return result;
-	}
-	
-	public void interrupt(Task task) {
-		this.task = task;
-		
-		interruptable = false;// 여기까지는 monitor가 붙어있으므로 여기서 interruptable off해야 sync 효과 먹힌다.
-		interrupted = true;
-	}
-	
-	public boolean getInterruptable() {
-		return interruptable;
-	}
-	
-	public Task getInterruptTask() {
-		return task;
+		return new Result(status, result);
 	}
 	
 	/*
@@ -256,7 +195,7 @@ public class Account {
 	}
 	
 	// 아마 0일 때는 exception 날 수도 있을 것 같다.
-	private int getRateRemaining() {
+	public int getRateRemaining() {
 		int remaining = -1;
 		
 		try {
@@ -272,44 +211,12 @@ public class Account {
 		return remaining;
 	}
 	
-	/* 
-	 * 정의를 확실히 한다.
-	 * set될 때는 working이 되며, 여기서는 free, unavailable만 설정된다.
-	 * over limit/2는 free, under는 unavailable이다.
-	 * callback 없는 account에 대해서만 실행될 것이다.(즉 not working account.)
-	 * 단 하나의 예외는 있는데, task가 자기 자신의 account에 대해서는 check할 수 있다.(즉 its working account.)
-	 */
-	public void updateStatus() {
-		int remaining = getRateRemaining();
-		
-		if(remaining != -1) {
-			if(remaining < LIMIT / 2) {
-				status = Status.UNAVAILABLE;
-			} else {
-				status = Status.FREE;
-			}
-		} else {// 사실 꼭 이게 exceeded 아닐수도 있지만, 그냥 그렇게 간다.
-			status = Status.UNAVAILABLE;
-		}
-	}
-	
-	public void setStatus(Status status) {
-		this.status = status;
-	}
-	
-	public Status getStatus() {
-		return status;
-	}
-	
 	public void setAccountId(int id) {
 		this.id = id;
 	}
 	
 	public int getAccountId() {
 		return id;
-	}
-	
-	public interface AccountCallback {
 	}
 	
 }
